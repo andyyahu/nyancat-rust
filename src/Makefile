@@ -1,20 +1,16 @@
-OBJECTS = nyancat.o
-
-CC	?=
-CFLAGS	 ?= -g -Wall -Wextra -std=c99 -pedantic -Wwrite-strings
-CPPFLAGS ?=
-LDFLAGS  ?=
+CARGO ?= cargo
 
 all: nyancat
 
-nyancat: $(OBJECTS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@
+nyancat:
+	cd .. && $(CARGO) build --release
+	cp ../target/release/nyancat nyancat
 
 clean:
-	-rm -f $(OBJECTS) nyancat
+	cd .. && $(CARGO) clean
+	-rm -f nyancat
 
-check: all
-	# Unit tests go here. None currently.
-	@echo "*** ALL TESTS PASSED ***"
+check:
+	cd .. && $(CARGO) test
 
 .PHONY: all clean check

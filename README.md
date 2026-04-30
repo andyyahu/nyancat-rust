@@ -23,13 +23,17 @@ And also on some BSD systems:
 
 ## Setup
 
-First build the C application:
+First build the Rust application:
 
     make && cd src
 
-You can run the C application standalone.
+You can run the application standalone.
 
     ./nyancat
+
+Or run it directly with Cargo:
+
+    cargo run --release -- [options]
 
 To use the telnet server, you need to add a configuration that runs:
 

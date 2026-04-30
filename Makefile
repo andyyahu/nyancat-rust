@@ -15,10 +15,11 @@ $(distdir).tar.gz: $(distdir)
 $(distdir): FORCE
 	mkdir -p $(distdir)/src
 	cp Makefile $(distdir)
+	cp README.md CHANGELOG LICENSE nyancat.1 $(distdir)
+	cp Cargo.toml Cargo.lock $(distdir)
 	cp src/Makefile $(distdir)/src
-	cp src/nyancat.c $(distdir)/src
-	cp src/animation.c $(distdir)/src
-	cp src/telnet.h $(distdir)/src
+	cp src/main.rs $(distdir)/src
+	cp src/animation.rs $(distdir)/src
 
 FORCE:
 	-rm $(distdir).tar.gz >/dev/null 2>&1
@@ -33,7 +34,7 @@ distcheck: $(distdir).tar.gz
 	@echo "*** Package $(distdir).tar.gz is ready for distribution."
 
 install: all
-	install src/nyancat /usr/bin/${package}
+	install target/release/${package} /usr/bin/${package}
 	gzip -9 -c < nyancat.1 > /usr/share/man/man1/nyancat.1.gz
 
 .PHONY: FORCE all clean check dist distcheck install
