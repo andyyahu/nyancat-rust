@@ -1,61 +1,92 @@
-# Nyancat CLI
+# 🐱 Nyancat - Rust Edition
 
-Nyancat rendered in your terminal.
+> A fast, colorful Nyancat animation for your terminal, written in Rust.
 
-[![Nyancats](http://nyancat.dakko.us/nyancat.png)](http://nyancat.dakko.us/nyancat.png)
+[![License](https://img.shields.io/badge/license-NCSA-blue.svg)](LICENSE)
 
-## Distributions
+![Nyancat](http://nyancat.dakko.us/nyancat.png)
 
-Nyancat is available in the following distributions:
+## ✨ Features
 
-- [Arch](https://www.archlinux.org/packages/?q=nyancat)
-- [Debian](http://packages.qa.debian.org/n/nyancat.html)
-- [Fedora](https://src.fedoraproject.org/rpms/nyancat)
-- [Gentoo](http://packages.gentoo.org/package/games-misc/nyancat)
-- [Mandriva](http://sophie.zarb.org/rpms/928724d4aea0efdbdeda1c80cb59a7d3)
-- [Ubuntu](https://launchpad.net/ubuntu/+source/nyancat)
+- **High-performance animation** - Written in Rust for speed and efficiency
+- **Terminal rendering** - Works in any ANSI-compatible terminal
+- **Telnet server** - Share Nyancat over the network with telnet
+- **Cross-platform** - Supports Linux, macOS, BSD, and other Unix-like systems
+- **Minimal dependencies** - No external crates required
 
-And also on some BSD systems:
+## 🚀 Quick Start
 
-- [FreeBSD](http://www.freshports.org/net/nyancat/)
-- [OpenBSD](http://openports.se/misc/nyancat)
-- [NetBSD](http://pkgsrc.se/misc/nyancat)
+### Build from source
 
-## Setup
+```bash
+make
+./src/nyancat
+```
 
-First build the Rust application:
+Or use Cargo directly:
 
-    make && cd src
+```bash
+cargo run --release
+```
 
-You can run the application standalone.
+### Run as telnet server
 
-    ./nyancat
+```bash
+./src/nyancat -t
+```
 
-Or run it directly with Cargo:
+Then connect with:
 
-    cargo run --release -- [options]
+```bash
+telnet localhost 23
+```
 
-To use the telnet server, you need to add a configuration that runs:
+For production setups, integrate with `systemd`, `xinetd`, or `openbsd-inetd`. Example systemd service files are included in the `systemd/` directory.
 
-    nyancat -t
+## 📦 Installation
 
-We recommend `openbsd-inetd`, but both `xinetd` and `systemd` work as well. You
-should be able to use any other compatible `inetd` flavor too.
+### From source
 
-## Distribution Specific Information
+```bash
+make
+sudo make install
+```
 
-#### Debian/Ubuntu
+## 💻 Usage
 
-Debian and Ubuntu provide the nyancat binary through the `nyancat` package. A
-`nyancat-server` package is provided to automatically setup and enable a nyancat
-telnet server upon installation. I am not the maintainer of these packages;
-please direct any questions or bugs to the relevant distribution's bug tracking
-system.
+```bash
+# Run the animation
+nyancat
 
-## Licenses, References, etc.
+# Run as telnet server
+nyancat -t
+```
 
-The original source of the Nyancat animation is
-[prguitarman](http://www.prguitarman.com/index.php?id=348).
+## 🔧 Development
 
-The code provided here is provided under the terms of the
-[NCSA license](http://en.wikipedia.org/wiki/University_of_Illinois/NCSA_Open_Source_License).
+### Prerequisites
+
+- Rust 1.56+ (2021 edition)
+- Make
+
+### Build
+
+```bash
+cargo build --release
+```
+
+### Project structure
+
+- `src/main.rs` - Main application logic with telnet protocol handling
+- `src/animation.rs` - Frame data and animation rendering
+- `systemd/` - Systemd service files for telnet server integration
+
+## � Credits
+
+- **Original Nyancat animation**: [prguitarman](http://www.prguitarman.com/index.php?id=348)
+- **Original implementation**: [Kevin Lange (klange)](https://github.com/klange/nyancat)
+- **Rust rewrite**: This project
+
+## 📜 License
+
+Licensed under the [NCSA License](LICENSE).

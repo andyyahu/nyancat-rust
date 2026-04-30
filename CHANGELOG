@@ -1,3 +1,9 @@
+1.5.2 (Rust Edition)
+    * Complete rewrite of Nyancat in Rust
+    * Improved performance and reduced memory footprint
+    * This is a community rewrite based on the original C implementation by K. Lange
+    * Original Nyancat animation by prguitarman
+
 1.4.1
     * Fix telnet size negotiation
 
