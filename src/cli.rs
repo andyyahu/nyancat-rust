@@ -1,6 +1,54 @@
 use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH};
 use std::fmt;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct CropBounds {
+    pub(crate) rows: AxisCrop,
+    pub(crate) cols: AxisCrop,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct AxisCrop {
+    min: Option<i32>,
+    max: Option<i32>,
+}
+
+impl AxisCrop {
+    const LEGACY_AUTO_VALUE: i32 = -1;
+
+    fn centered(frame_size: i32, size: i32) -> Self {
+        Self {
+            min: Some((frame_size - size) / 2),
+            max: Some((frame_size + size) / 2),
+        }
+    }
+
+    fn set_min(&mut self, min: i32) {
+        self.min = Some(min);
+    }
+
+    fn set_max(&mut self, max: i32) {
+        self.max = Some(max);
+    }
+
+    pub(crate) fn min_or_default(self) -> i32 {
+        self.min.unwrap_or(Self::LEGACY_AUTO_VALUE)
+    }
+
+    pub(crate) fn max_or_default(self) -> i32 {
+        self.max.unwrap_or(Self::LEGACY_AUTO_VALUE)
+    }
+
+    pub(crate) fn is_automatic_range(self) -> bool {
+        self.min_or_default() == self.max_or_default()
+    }
+
+    #[cfg(test)]
+    fn as_pair(self) -> (i32, i32) {
+        (self.min_or_default(), self.max_or_default())
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Config {
     pub(crate) telnet: bool,
@@ -13,10 +61,7 @@ pub(crate) struct Config {
     pub(crate) delay_ms: u64,
     pub(crate) benchmark: bool,
     pub(crate) truecolor: bool,
-    pub(crate) min_row: i32,
-    pub(crate) max_row: i32,
-    pub(crate) min_col: i32,
-    pub(crate) max_col: i32,
+    pub(crate) crop: CropBounds,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -81,10 +126,7 @@ impl Default for Config {
             delay_ms: 90,
             benchmark: false,
             truecolor: false,
-            min_row: -1,
-            max_row: -1,
-            min_col: -1,
-            max_col: -1,
+            crop: CropBounds::default(),
         }
     }
 }
@@ -219,18 +261,12 @@ fn apply_option(config: &mut Config, opt: char, option: &str, value: &str) -> Re
             config.delay_ms = parsed as u64;
         }
         'f' => config.frame_count = parsed.max(0) as u32,
-        'r' => config.min_row = parsed,
-        'R' => config.max_row = parsed,
-        'c' => config.min_col = parsed,
-        'C' => config.max_col = parsed,
-        'W' => {
-            config.min_col = (FRAME_WIDTH as i32 - parsed) / 2;
-            config.max_col = (FRAME_WIDTH as i32 + parsed) / 2;
-        }
-        'H' => {
-            config.min_row = (FRAME_HEIGHT as i32 - parsed) / 2;
-            config.max_row = (FRAME_HEIGHT as i32 + parsed) / 2;
-        }
+        'r' => config.crop.rows.set_min(parsed),
+        'R' => config.crop.rows.set_max(parsed),
+        'c' => config.crop.cols.set_min(parsed),
+        'C' => config.crop.cols.set_max(parsed),
+        'W' => config.crop.cols = AxisCrop::centered(FRAME_WIDTH as i32, parsed),
+        'H' => config.crop.rows = AxisCrop::centered(FRAME_HEIGHT as i32, parsed),
         _ => {
             return Err(CliError::UnknownOption {
                 option: option.to_string(),
@@ -294,8 +330,18 @@ mod tests {
         let mut config = Config::default();
         apply_option(&mut config, 'W', "-W", "40").unwrap();
         apply_option(&mut config, 'H', "-H", "24").unwrap();
-        assert_eq!((config.min_col, config.max_col), (12, 52));
-        assert_eq!((config.min_row, config.max_row), (20, 44));
+        assert_eq!(config.crop.cols.as_pair(), (12, 52));
+        assert_eq!(config.crop.rows.as_pair(), (20, 44));
+    }
+
+    #[test]
+    fn default_crop_is_automatic() {
+        let config = Config::default();
+
+        assert_eq!(config.crop.cols.as_pair(), (-1, -1));
+        assert_eq!(config.crop.rows.as_pair(), (-1, -1));
+        assert!(config.crop.cols.is_automatic_range());
+        assert!(config.crop.rows.is_automatic_range());
     }
 
     #[test]
@@ -323,8 +369,8 @@ mod tests {
         assert_eq!(config.delay_ms, 120);
         assert_eq!(config.frame_count, 3);
         assert!(config.skip_intro);
-        assert_eq!((config.min_col, config.max_col), (12, 52));
-        assert_eq!((config.min_row, config.max_row), (20, 44));
+        assert_eq!(config.crop.cols.as_pair(), (12, 52));
+        assert_eq!(config.crop.rows.as_pair(), (20, 44));
     }
 
     #[test]

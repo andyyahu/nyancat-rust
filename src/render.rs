@@ -22,25 +22,26 @@ pub(crate) struct RenderState {
 
 impl RenderState {
     pub(crate) fn new(config: &Config, terminal_width: i32, terminal_height: i32) -> Self {
+        let rows = config.crop.rows;
+        let cols = config.crop.cols;
+
         Self {
             terminal_width,
             terminal_height,
-            min_row: config.min_row,
-            max_row: config.max_row,
-            min_col: config.min_col,
-            max_col: config.max_col,
-            using_automatic_width: false,
-            using_automatic_height: false,
+            min_row: rows.min_or_default(),
+            max_row: rows.max_or_default(),
+            min_col: cols.min_or_default(),
+            max_col: cols.max_or_default(),
+            using_automatic_width: cols.is_automatic_range(),
+            using_automatic_height: rows.is_automatic_range(),
         }
     }
 
     pub(crate) fn finalize_auto_crop(&mut self) {
-        if self.min_col == self.max_col {
-            self.using_automatic_width = true;
+        if self.using_automatic_width {
             self.recalculate_width();
         }
-        if self.min_row == self.max_row {
-            self.using_automatic_height = true;
+        if self.using_automatic_height {
             self.recalculate_height();
         }
     }
