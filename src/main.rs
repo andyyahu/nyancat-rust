@@ -575,15 +575,18 @@ fn render_frame(
                 frame[y as usize].as_bytes()[x as usize]
             };
 
-            if let Some(output) = palette.output {
-                if color != last && !palette.colors[color as usize].is_empty() {
-                    last = color;
+            match palette.output {
+                Some(output) => {
+                    if color != last && !palette.colors[color as usize].is_empty() {
+                        last = color;
+                        out.extend_from_slice(palette.colors[color as usize]);
+                    }
+                    out.extend_from_slice(output);
+                }
+                None => {
+                    // ASCII mode: palette.colors already contains the visual representation
                     out.extend_from_slice(palette.colors[color as usize]);
                 }
-                out.extend_from_slice(output);
-            } else {
-                // ASCII mode: palette.colors already contains the visual representation
-                out.extend_from_slice(palette.colors[color as usize]);
             }
         }
         push_newline(out, config.telnet, 1);
