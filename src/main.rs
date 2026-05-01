@@ -7,7 +7,7 @@ mod telnet;
 mod terminal;
 
 use cli::{CliAction, parse_args, print_usage};
-use render::{Palette, RenderState, run};
+use render::{Palette, RenderState, RunOutcome, run};
 use runtime::{clear_screen_on_exit, finish, install_signal_handlers, set_clear_screen_on_exit};
 use std::env;
 use std::io::{self, Write};
@@ -74,11 +74,14 @@ fn main() {
     let mut state = RenderState::new(&config, terminal_width, terminal_height);
     state.finalize_auto_crop();
 
-    if let Err(error) = run(config, state, palette) {
-        if error.kind() == io::ErrorKind::BrokenPipe {
+    match run(config, state, palette) {
+        Ok(RunOutcome::FrameLimitReached { clear_screen }) => finish(clear_screen),
+        Err(error) => {
+            if error.kind() == io::ErrorKind::BrokenPipe {
+                finish(clear_screen_on_exit());
+            }
+            let _ = writeln!(io::stderr(), "nyancat: {error}");
             finish(clear_screen_on_exit());
         }
-        let _ = writeln!(io::stderr(), "nyancat: {error}");
-        finish(clear_screen_on_exit());
     }
 }

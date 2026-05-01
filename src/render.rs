@@ -1,6 +1,6 @@
 use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES};
 use crate::cli::Config;
-use crate::runtime::{finish, take_resize_pending};
+use crate::runtime::take_resize_pending;
 use crate::terminal::{TerminalType, terminal_size};
 use std::io::{self, Write};
 use std::thread;
@@ -218,7 +218,15 @@ impl Palette {
     }
 }
 
-pub(crate) fn run(config: Config, mut state: RenderState, palette: Palette) -> io::Result<()> {
+pub(crate) enum RunOutcome {
+    FrameLimitReached { clear_screen: bool },
+}
+
+pub(crate) fn run(
+    config: Config,
+    mut state: RenderState,
+    palette: Palette,
+) -> io::Result<RunOutcome> {
     let mut stdout = io::stdout().lock();
 
     if config.set_title {
@@ -270,7 +278,9 @@ pub(crate) fn run(config: Config, mut state: RenderState, palette: Palette) -> i
 
         frames_rendered = frames_rendered.saturating_add(1);
         if config.frame_count != 0 && frames_rendered == config.frame_count {
-            finish(config.clear_screen);
+            return Ok(RunOutcome::FrameLimitReached {
+                clear_screen: config.clear_screen,
+            });
         }
 
         frame_index += 1;
