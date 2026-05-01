@@ -155,6 +155,8 @@ struct Config {
     show_intro: bool,
     skip_intro: bool,
     delay_ms: u64,
+    benchmark: bool,
+    truecolor: bool,
     min_row: i32,
     max_row: i32,
     min_col: i32,
@@ -172,6 +174,8 @@ impl Default for Config {
             show_intro: false,
             skip_intro: false,
             delay_ms: 90,
+            benchmark: false,
+            truecolor: false,
             min_row: -1,
             max_row: -1,
             min_col: -1,
@@ -446,6 +450,14 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     parse_args(&args, &mut config);
 
+    if config.benchmark {
+        config.delay_ms = 0;
+        let _ = writeln!(
+            io::stderr(),
+            "\x1b[1;33mWARNING:\x1b[0m Benchmark mode enabled. Delay set to 0ms."
+        );
+    }
+
     if config.telnet && !config.skip_intro {
         config.show_intro = true;
     }
@@ -469,7 +481,10 @@ fn main() {
         (env::var("TERM").ok(), width, height)
     };
 
-    let ttype = detect_terminal_type(term.as_deref(), terminal_width);
+    let mut ttype = detect_terminal_type(term.as_deref(), terminal_width);
+    if config.truecolor {
+        ttype = 8;
+    }
     if ttype == 7 {
         terminal_width = 40;
     }
@@ -843,6 +858,8 @@ fn parse_args(args: &[String], config: &mut Config) {
                 "no-counter" => config.show_counter = false,
                 "no-title" => config.set_title = false,
                 "no-clear" => config.clear_screen = false,
+                "benchmark" => config.benchmark = true,
+                "truecolor" => config.truecolor = true,
                 "delay" | "frames" | "min-rows" | "max-rows" | "min-cols" | "max-cols"
                 | "width" | "height" => {
                     let value = value.unwrap_or_else(|| {
@@ -884,6 +901,8 @@ fn apply_flag(config: &mut Config, opt: char, program: &str) {
         'i' => config.show_intro = true,
         'I' => config.skip_intro = true,
         't' => config.telnet = true,
+        'b' => config.benchmark = true,
+        'T' => config.truecolor = true,
         'h' => {
             usage(program);
             process::exit(0);
@@ -944,9 +963,11 @@ fn usage(program: &str) {
          \n\
           -i --intro      \x1b[3mShow the introduction / about information at startup.\x1b[0m\n\
           -t --telnet     \x1b[3mTelnet mode.\x1b[0m\n\
+          -T --truecolor  \x1b[3mEnable 24-bit TrueColor mode (high-definition rendering)\x1b[0m\n\
           -n --no-counter \x1b[3mDo not display the timer\x1b[0m\n\
           -s --no-title   \x1b[3mDo not set the titlebar text\x1b[0m\n\
           -e --no-clear   \x1b[3mDo not clear the display between frames\x1b[0m\n\
+          -b --benchmark  \x1b[3mRun in benchmark mode (0ms delay). Warning: high CPU usage\x1b[0m\n\
           -d --delay      \x1b[3mDelay image rendering by anywhere between 10ms and 1000ms\n\
           -f --frames     \x1b[3mDisplay the requested number of frames, then quit\x1b[0m\n\
           -r --min-rows   \x1b[3mCrop the animation from the top\x1b[0m\n\
