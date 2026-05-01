@@ -1,6 +1,5 @@
 use crate::sys;
 use std::io::{self, Write};
-use std::process;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static CLEAR_SCREEN_ON_EXIT: AtomicBool = AtomicBool::new(true);
@@ -25,13 +24,9 @@ pub(crate) fn install_signal_handlers() {
 }
 
 extern "C" fn handle_exit_signal(_: i32) {
-    let sequence = if CLEAR_SCREEN_ON_EXIT.load(Ordering::Relaxed) {
-        b"\x1b[?25h\x1b[0m\x1b[H\x1b[2J" as &[u8]
-    } else {
-        b"\x1b[0m\n" as &[u8]
-    };
-
-    sys::write_stdout_raw(sequence);
+    sys::write_stdout_raw(restore_sequence(
+        CLEAR_SCREEN_ON_EXIT.load(Ordering::Relaxed),
+    ));
     sys::exit(0);
 }
 
@@ -39,13 +34,31 @@ extern "C" fn handle_resize_signal(_: i32) {
     RESIZE_PENDING.store(true, Ordering::Relaxed);
 }
 
-pub(crate) fn finish(clear_screen: bool) -> ! {
+pub(crate) fn restore_terminal(clear_screen: bool) -> io::Result<()> {
     let mut stdout = io::stdout().lock();
+    stdout.write_all(restore_sequence(clear_screen))?;
+    stdout.flush()
+}
+
+fn restore_sequence(clear_screen: bool) -> &'static [u8] {
     if clear_screen {
-        let _ = stdout.write_all(b"\x1b[?25h\x1b[0m\x1b[H\x1b[2J");
+        b"\x1b[?25h\x1b[0m\x1b[H\x1b[2J"
     } else {
-        let _ = stdout.write_all(b"\x1b[0m\n");
+        b"\x1b[0m\n"
     }
-    let _ = stdout.flush();
-    process::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restore_sequence_clears_screen_when_requested() {
+        assert_eq!(restore_sequence(true), b"\x1b[?25h\x1b[0m\x1b[H\x1b[2J");
+    }
+
+    #[test]
+    fn restore_sequence_preserves_screen_when_requested() {
+        assert_eq!(restore_sequence(false), b"\x1b[0m\n");
+    }
 }

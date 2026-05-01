@@ -8,26 +8,28 @@ mod terminal;
 
 use cli::{CliAction, parse_args, print_usage};
 use render::{Palette, RenderState, RunOutcome, run};
-use runtime::{clear_screen_on_exit, finish, install_signal_handlers, set_clear_screen_on_exit};
+use runtime::{
+    clear_screen_on_exit, install_signal_handlers, restore_terminal, set_clear_screen_on_exit,
+};
 use std::env;
 use std::io::{self, Write};
-use std::process;
+use std::process::ExitCode;
 use telnet::negotiate_telnet;
 use terminal::{TerminalType, detect_terminal_type, terminal_size};
 
-fn main() {
+fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     let mut config = match parse_args(&args) {
         Ok(CliAction::Run(config)) => config,
         Ok(CliAction::Help { program }) => {
             print_usage(&program);
-            return;
+            return ExitCode::SUCCESS;
         }
         Err(error) => {
             let program = args.first().map_or("nyancat", String::as_str);
             let _ = writeln!(io::stderr(), "nyancat: {error}");
             let _ = writeln!(io::stderr(), "Try '{program} --help' for usage.");
-            process::exit(1);
+            return ExitCode::FAILURE;
         }
     };
 
@@ -50,7 +52,7 @@ fn main() {
         let mut stdout = io::stdout().lock();
         let info = match negotiate_telnet(&mut stdout) {
             Ok(info) => info,
-            Err(_) => finish(config.clear_screen),
+            Err(_) => return restore_and_succeed(config.clear_screen),
         };
         (
             info.term,
@@ -75,13 +77,18 @@ fn main() {
     state.finalize_auto_crop();
 
     match run(config, state, palette) {
-        Ok(RunOutcome::FrameLimitReached { clear_screen }) => finish(clear_screen),
+        Ok(RunOutcome::FrameLimitReached { clear_screen }) => restore_and_succeed(clear_screen),
         Err(error) => {
             if error.kind() == io::ErrorKind::BrokenPipe {
-                finish(clear_screen_on_exit());
+                return restore_and_succeed(clear_screen_on_exit());
             }
             let _ = writeln!(io::stderr(), "nyancat: {error}");
-            finish(clear_screen_on_exit());
+            restore_and_succeed(clear_screen_on_exit())
         }
     }
+}
+
+fn restore_and_succeed(clear_screen: bool) -> ExitCode {
+    let _ = restore_terminal(clear_screen);
+    ExitCode::SUCCESS
 }
