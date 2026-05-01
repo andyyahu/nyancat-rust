@@ -749,6 +749,7 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
                     sb.clear();
                 }
                 IAC => {
+                    // IAC IAC signals end of negotiation; bail out early
                     got_ttype = true;
                     got_naws = true;
                 }
