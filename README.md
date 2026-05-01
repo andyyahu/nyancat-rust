@@ -50,7 +50,7 @@ cargo run --release
 ### Run as telnet server
 
 ```bash
-./src/nyancat -t
+./target/release/nyancat -t
 ```
 
 Then connect with:
