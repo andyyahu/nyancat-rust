@@ -67,7 +67,7 @@ pub mod sys {
         pub revents: i16,
     }
 
-    extern "C" {
+    unsafe extern "C" {
         pub fn ioctl(fd: i32, request: usize, ...) -> i32;
         pub fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
         pub fn signal(signum: i32, handler: usize) -> usize;

@@ -66,7 +66,7 @@ nyancat -t
 
 ### Prerequisites
 
-- Rust 1.56+ (2021 edition)
+- Rust 1.85+ (2024 edition)
 - Make
 
 ### Build
