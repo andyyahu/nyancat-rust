@@ -49,28 +49,11 @@ impl TimeoutReader {
         let timeout = deadline.saturating_duration_since(now);
         let timeout_ms = timeout.as_millis().min(i32::MAX as u128) as i32;
 
-        let mut fds = sys::PollFd {
-            fd: 0,
-            events: sys::POLLIN,
-            revents: 0,
-        };
-
-        let rc = unsafe { sys::poll(&mut fds, 1, timeout_ms) };
-        if rc > 0 && (fds.revents & sys::POLLIN) != 0 {
-            let bytes_read =
-                unsafe { sys::read(0, self.buffer.as_mut_ptr().cast(), self.buffer.len()) };
-            if bytes_read > 0 {
+        if sys::stdin_ready(timeout_ms) {
+            if let Some(bytes_read) = sys::read_stdin(&mut self.buffer)? {
                 self.head = 1;
-                self.tail = bytes_read as usize;
+                self.tail = bytes_read;
                 return Ok(Some(self.buffer[0]));
-            } else if bytes_read == 0 {
-                return Ok(None);
-            } else {
-                let err = io::Error::last_os_error();
-                if err.kind() == io::ErrorKind::Interrupted {
-                    return Ok(None);
-                }
-                return Err(err);
             }
         }
 

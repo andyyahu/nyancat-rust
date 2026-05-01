@@ -19,11 +19,9 @@ pub(crate) fn take_resize_pending() -> bool {
 }
 
 pub(crate) fn install_signal_handlers() {
-    unsafe {
-        sys::signal(sys::SIGINT, handle_exit_signal as *const () as usize);
-        sys::signal(sys::SIGPIPE, handle_exit_signal as *const () as usize);
-        sys::signal(sys::SIGWINCH, handle_resize_signal as *const () as usize);
-    }
+    sys::install_signal_handler(sys::SIGINT, handle_exit_signal);
+    sys::install_signal_handler(sys::SIGPIPE, handle_exit_signal);
+    sys::install_signal_handler(sys::SIGWINCH, handle_resize_signal);
 }
 
 extern "C" fn handle_exit_signal(_: i32) {

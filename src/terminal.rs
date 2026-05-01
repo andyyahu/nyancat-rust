@@ -13,19 +13,7 @@ pub(crate) enum TerminalType {
 }
 
 pub(crate) fn terminal_size() -> (i32, i32) {
-    let mut winsize = sys::Winsize {
-        ws_row: 0,
-        ws_col: 0,
-        ws_xpixel: 0,
-        ws_ypixel: 0,
-    };
-
-    let rc = unsafe { sys::ioctl(0, sys::TIOCGWINSZ, &mut winsize) };
-    if rc == 0 && winsize.ws_col > 0 && winsize.ws_row > 0 {
-        (winsize.ws_col as i32, winsize.ws_row as i32)
-    } else {
-        (80, 24)
-    }
+    sys::stdin_terminal_size().unwrap_or((80, 24))
 }
 
 pub(crate) fn detect_terminal_type(term: Option<&str>, terminal_width: i32) -> TerminalType {
