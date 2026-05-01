@@ -1,15 +1,15 @@
-.TH NYANCAT 1 "February, 2014"
+.TH NYANCAT 1 "May, 2026"
 .SH NAME
-nyancat \- terminal-based Pop Tart Cat animation
+nyancat \- terminal-based Pop Tart Cat animation (Rust Edition)
 .SH SYNOPSIS
-.B nyancat [ \-hitn ] [\-f frames]
+.B nyancat [ \-hitnTb ] [\-f frames]
 .SH DESCRIPTION
 .B nyancat
-is an animated, color, ANSI-text program that renders a loop of the
+is a high-performance, color, ANSI-text program written in Rust that renders a loop of the
 classic Nyan Cat animation.
 .PP
-nyancat makes use of various ANSI escape sequences to render color, or in the case
-of a VT220, simply dumps text to the screen.
+nyancat makes use of various ANSI escape sequences to render color, and supports 
+24-bit TrueColor rendering for high-definition displays.
 .SH OPTIONS
 .TP
 .B \-i, \-\-intro
@@ -21,6 +21,9 @@ Skip the introduction in telnet mode.
 .B \-t, \-\-telnet
 Enable telnet mode.
 .TP
+.B \-T, \-\-truecolor
+Enable 24-bit TrueColor mode (high-definition rendering).
+.TP
 .B \-n, \-\-no\-counter
 Do not display the timer.
 .TP
@@ -29,6 +32,9 @@ Do not set the titlebar text.
 .TP
 .B \-e, \-\-no\-clear
 Do not clear the display between frames.
+.TP
+.B \-b, \-\-benchmark
+Run in benchmark mode (0ms delay). Warning: high CPU and bandwidth usage.
 .TP
 .B \-d, \-\-delay
 Delay image rendering by anywhere between 10ms and 1000ms.
@@ -62,12 +68,9 @@ Show help message and exit.
 .PP
 .B Homepage:
 http://nyancat.dakko.us/
-.PP
-.B Repository:
-https://github.com/klange/nyancat
 .SH AUTHOR
 Original C nyancat was written by K. Lange <klange@toaruos.org>.
-This Rust port was developed by the community.
+This Rust port was developed by Andy and the community.
 .PP
 This manual page was written by Jonathan McCrohan <jmccrohan@gmail.com>,
-for the Debian project (and may be used by others).
+updated by Andy for the Rust Edition.
