@@ -67,7 +67,7 @@ pub mod sys {
         pub revents: i16,
     }
 
-    unsafe extern "C" {
+    extern "C" {
         pub fn ioctl(fd: i32, request: usize, ...) -> i32;
         pub fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
         pub fn signal(signum: i32, handler: usize) -> usize;
@@ -145,7 +145,6 @@ impl TimeoutReader {
     }
 }
 
-#[derive(Clone)]
 struct Config {
     telnet: bool,
     show_counter: bool,
@@ -228,28 +227,26 @@ impl RenderState {
     }
 
     fn recalculate_width(&mut self) {
-        self.min_col = (FRAME_WIDTH - self.terminal_width / 2) / 2;
-        self.max_col = (FRAME_WIDTH + self.terminal_width / 2) / 2;
+        self.min_col = (FRAME_WIDTH as i32 - self.terminal_width / 2) / 2;
+        self.max_col = (FRAME_WIDTH as i32 + self.terminal_width / 2) / 2;
     }
 
     fn recalculate_height(&mut self) {
-        self.min_row = (FRAME_HEIGHT - (self.terminal_height - 1)) / 2;
-        self.max_row = (FRAME_HEIGHT + (self.terminal_height - 1)) / 2;
+        self.min_row = (FRAME_HEIGHT as i32 - (self.terminal_height - 1)) / 2;
+        self.max_row = (FRAME_HEIGHT as i32 + (self.terminal_height - 1)) / 2;
     }
 }
 
 struct Palette {
     colors: [&'static [u8]; 256],
-    output: &'static [u8],
-    always_escape: bool,
+    output: Option<&'static [u8]>,
 }
 
 impl Palette {
     fn new(ttype: u8) -> Self {
         let mut palette = Self {
             colors: [EMPTY; 256],
-            output: b"  ",
-            always_escape: false,
+            output: Some(b"  "),
         };
 
         match ttype {
@@ -316,7 +313,7 @@ impl Palette {
                 palette.colors[b';' as usize] = b"\x1b[0;34;44m";
                 palette.colors[b'*' as usize] = b"\x1b[1;30;40m";
                 palette.colors[b'%' as usize] = b"\x1b[1;35;45m";
-                palette.output = "██".as_bytes();
+                palette.output = Some("██".as_bytes());
             }
             5 => {
                 palette.colors[b',' as usize] = b"\x1b[0;34;44m";
@@ -333,7 +330,7 @@ impl Palette {
                 palette.colors[b';' as usize] = b"\x1b[0;34;44m";
                 palette.colors[b'*' as usize] = b"\x1b[1;30;40m";
                 palette.colors[b'%' as usize] = b"\x1b[1;35;45m";
-                palette.output = CP437_BLOCKS;
+                palette.output = Some(CP437_BLOCKS);
             }
             6 => {
                 palette.colors[b',' as usize] = b"::";
@@ -350,7 +347,7 @@ impl Palette {
                 palette.colors[b';' as usize] = b"$$";
                 palette.colors[b'*' as usize] = b";;";
                 palette.colors[b'%' as usize] = b"()";
-                palette.always_escape = true;
+                palette.output = None;
             }
             7 => {
                 palette.colors[b',' as usize] = b".";
@@ -367,7 +364,7 @@ impl Palette {
                 palette.colors[b';' as usize] = b"$";
                 palette.colors[b'*' as usize] = b";";
                 palette.colors[b'%' as usize] = b"o";
-                palette.always_escape = true;
+                palette.output = None;
             }
             8 => {
                 palette.colors[b',' as usize] = b"\x1b[48;2;0;49;105m";
@@ -565,26 +562,28 @@ fn render_frame(
     for y in state.min_row..state.max_row {
         for x in state.min_col..state.max_col {
             let color = if y > 23 && y < 43 && x < 0 {
+                // Generate rainbow tail for negative x coordinates (off-screen left)
                 let mut mod_x = ((-x + 2) % 16) / 8;
                 if (frame_index / 2) % 2 == 1 {
                     mod_x = 1 - mod_x;
                 }
                 let index = (mod_x + y - 23) as usize;
                 RAINBOW.get(index).copied().unwrap_or(b',')
-            } else if !(0..FRAME_HEIGHT).contains(&y) || !(0..FRAME_WIDTH).contains(&x) {
+            } else if !(0..FRAME_HEIGHT as i32).contains(&y) || !(0..FRAME_WIDTH as i32).contains(&x) {
                 b','
             } else {
                 frame[y as usize].as_bytes()[x as usize]
             };
 
-            if palette.always_escape {
-                out.extend_from_slice(palette.colors[color as usize]);
-            } else if color != last && !palette.colors[color as usize].is_empty() {
-                last = color;
-                out.extend_from_slice(palette.colors[color as usize]);
-                out.extend_from_slice(palette.output);
+            if let Some(output) = palette.output {
+                if color != last && !palette.colors[color as usize].is_empty() {
+                    last = color;
+                    out.extend_from_slice(palette.colors[color as usize]);
+                }
+                out.extend_from_slice(output);
             } else {
-                out.extend_from_slice(palette.output);
+                // ASCII mode: palette.colors already contains the visual representation
+                out.extend_from_slice(palette.colors[color as usize]);
             }
         }
         push_newline(out, config.telnet, 1);
@@ -664,23 +663,21 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
     let mut state = TelnetState::new();
 
     for option in 0..=255u8 {
-        let command = state.options[option as usize];
-        if command != 0 {
-            state.send_command(out, command, option)?;
-            out.flush()?;
+        let cmd_opt = state.options[option as usize];
+        if cmd_opt != 0 {
+            state.send_command(out, cmd_opt, option)?;
+        }
+        let cmd_willack = state.willack[option as usize];
+        if cmd_willack != 0 {
+            state.send_command(out, cmd_willack, option)?;
         }
     }
-    for option in 0..=255u8 {
-        let command = state.willack[option as usize];
-        if command != 0 {
-            state.send_command(out, command, option)?;
-            out.flush()?;
-        }
-    }
+    out.flush()?;
 
     let mut input = TimeoutReader::new();
     let mut deadline = Instant::now() + Duration::from_secs(1);
-    let mut done = 0u8;
+    let mut got_ttype = false;
+    let mut got_naws = false;
     let mut sb_mode = false;
     let mut sb = Vec::with_capacity(1024);
     let mut info = TelnetInfo {
@@ -689,7 +686,7 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
         height: None,
     };
 
-    while done < 2 {
+    while !got_ttype || !got_naws {
         let Some(byte) = input.read_byte(deadline)? else {
             break;
         };
@@ -704,12 +701,12 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
                     sb_mode = false;
                     if sb.first().copied() == Some(TTYPE) && sb.len() >= 2 {
                         info.term = Some(String::from_utf8_lossy(&sb[2..]).into_owned());
-                        done = done.saturating_add(1);
+                        got_ttype = true;
                         deadline = Instant::now() + Duration::from_secs(2);
                     } else if sb.first().copied() == Some(NAWS) && sb.len() >= 5 {
                         info.width = Some(u16::from_be_bytes([sb[1], sb[2]]) as i32);
                         info.height = Some(u16::from_be_bytes([sb[3], sb[4]]) as i32);
-                        done = done.saturating_add(1);
+                        got_naws = true;
                         deadline = Instant::now() + Duration::from_secs(2);
                     }
                 }
@@ -746,7 +743,8 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
                     sb.clear();
                 }
                 IAC => {
-                    done = 2;
+                    got_ttype = true;
+                    got_naws = true;
                 }
                 _ => {}
             }
@@ -904,12 +902,12 @@ fn apply_option(config: &mut Config, opt: char, value: &str) {
         'c' => config.min_col = parsed,
         'C' => config.max_col = parsed,
         'W' => {
-            config.min_col = (FRAME_WIDTH - parsed) / 2;
-            config.max_col = (FRAME_WIDTH + parsed) / 2;
+            config.min_col = (FRAME_WIDTH as i32 - parsed) / 2;
+            config.max_col = (FRAME_WIDTH as i32 + parsed) / 2;
         }
         'H' => {
-            config.min_row = (FRAME_HEIGHT - parsed) / 2;
-            config.max_row = (FRAME_HEIGHT + parsed) / 2;
+            config.min_row = (FRAME_HEIGHT as i32 - parsed) / 2;
+            config.max_row = (FRAME_HEIGHT as i32 + parsed) / 2;
         }
         _ => {}
     }
