@@ -1,6 +1,6 @@
 mod animation;
 
-use animation::{FRAMES, FRAME_HEIGHT, FRAME_WIDTH};
+use animation::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES};
 use std::env;
 use std::io::{self, Write};
 use std::process;
@@ -915,10 +915,8 @@ fn apply_flag(config: &mut Config, opt: char, program: &str) {
 fn apply_option(config: &mut Config, opt: char, value: &str) {
     let parsed = value.parse::<i32>().unwrap_or(0);
     match opt {
-        'd' => {
-            if (10..=1000).contains(&parsed) {
-                config.delay_ms = parsed as u64;
-            }
+        'd' if (10..=1000).contains(&parsed) => {
+            config.delay_ms = parsed as u64;
         }
         'f' => config.frame_count = parsed.max(0) as u32,
         'r' => config.min_row = parsed,
@@ -959,9 +957,10 @@ fn usage(program: &str) {
     println!(
         "Terminal Nyancat\n\
          \n\
-         usage: {program} [-hitn] [-f \x1b[3mframes\x1b[0m]\n\
+         usage: {program} [-hIitnTb] [-f \x1b[3mframes\x1b[0m]\n\
          \n\
           -i --intro      \x1b[3mShow the introduction / about information at startup.\x1b[0m\n\
+          -I --skip-intro \x1b[3mSkip the introduction in telnet mode.\x1b[0m\n\
           -t --telnet     \x1b[3mTelnet mode.\x1b[0m\n\
           -T --truecolor  \x1b[3mEnable 24-bit TrueColor mode (high-definition rendering)\x1b[0m\n\
           -n --no-counter \x1b[3mDo not display the timer\x1b[0m\n\
@@ -1034,5 +1033,44 @@ mod tests {
         apply_option(&mut config, 'H', "24");
         assert_eq!((config.min_col, config.max_col), (12, 52));
         assert_eq!((config.min_row, config.max_row), (20, 44));
+    }
+
+    #[test]
+    fn parses_short_flags_and_options() {
+        let mut config = Config::default();
+        let args = vec![
+            "nyancat".to_string(),
+            "-Tnse".to_string(),
+            "-d".to_string(),
+            "120".to_string(),
+            "-f3".to_string(),
+            "--skip-intro".to_string(),
+            "--width=40".to_string(),
+            "--height".to_string(),
+            "24".to_string(),
+        ];
+
+        parse_args(&args, &mut config);
+
+        assert!(config.truecolor);
+        assert!(!config.show_counter);
+        assert!(!config.set_title);
+        assert!(!config.clear_screen);
+        assert_eq!(config.delay_ms, 120);
+        assert_eq!(config.frame_count, 3);
+        assert!(config.skip_intro);
+        assert_eq!((config.min_col, config.max_col), (12, 52));
+        assert_eq!((config.min_row, config.max_row), (20, 44));
+    }
+
+    #[test]
+    fn invalid_delay_keeps_default() {
+        let mut config = Config::default();
+
+        apply_option(&mut config, 'd', "9");
+        apply_option(&mut config, 'd', "1001");
+        apply_option(&mut config, 'd', "not-a-number");
+
+        assert_eq!(config.delay_ms, 90);
     }
 }

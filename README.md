@@ -12,7 +12,7 @@
 - **Terminal rendering** - Works in any ANSI-compatible terminal
 - **TrueColor support** - Optional 24-bit high-definition rendering mode
 - **Benchmark mode** - Zero-delay rendering for performance testing
-- **Telnet server** - Share Nyancat over the network with telnet
+- **Telnet mode** - Share Nyancat over the network through socket activation or inetd
 - **Cross-platform** - Supports Linux, macOS, BSD, and other Unix-like systems
 - **Minimal dependencies** - No external crates required
 
@@ -47,10 +47,15 @@ Or run directly with Cargo:
 cargo run --release
 ```
 
-### Run as telnet server
+### Serve over telnet
 
 ```bash
-./target/release/nyancat -t
+# The -t flag speaks telnet over stdin/stdout; it does not open a listening port.
+# Use the included systemd socket files, xinetd, or openbsd-inetd for network access.
+sudo cp target/release/nyancat /usr/bin/nyancat
+sudo cp systemd/nyancat.socket systemd/nyancat@.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now nyancat.socket
 ```
 
 Then connect with:
@@ -59,7 +64,7 @@ Then connect with:
 telnet localhost 23
 ```
 
-For production setups, integrate with `systemd`, `xinetd`, or `openbsd-inetd`. Example systemd service files are included in the `systemd/` directory.
+Example systemd service files are included in the `systemd/` directory.
 
 ## 📦 Installation
 
@@ -77,7 +82,7 @@ cp target/release/nyancat /usr/local/bin/
 # Run the animation
 nyancat
 
-# Run as telnet server
+# Run with telnet negotiation on stdin/stdout
 nyancat -t
 
 # Run in benchmark mode (0ms delay)
@@ -92,7 +97,8 @@ nyancat -T
 | Flag | Long Option | Description |
 | :--- | :--- | :--- |
 | `-i` | `--intro` | Show introduction at startup |
-| `-t` | `--telnet` | Enable Telnet server mode |
+| `-I` | `--skip-intro` | Skip the introduction in telnet mode |
+| `-t` | `--telnet` | Enable Telnet protocol mode |
 | `-T` | `--truecolor` | Enable 24-bit TrueColor rendering |
 | `-n` | `--no-counter` | Do not display the timer |
 | `-s` | `--no-title` | Do not set titlebar text |
@@ -100,6 +106,10 @@ nyancat -T
 | `-b` | `--benchmark` | Run with 0ms delay (Warning: high CPU) |
 | `-d` | `--delay` | Set delay (10ms - 1000ms) |
 | `-f` | `--frames` | Quit after N frames |
+| `-r` | `--min-rows` | Crop the animation from the top |
+| `-R` | `--max-rows` | Crop the animation from the bottom |
+| `-c` | `--min-cols` | Crop the animation from the left |
+| `-C` | `--max-cols` | Crop the animation from the right |
 | `-W` | `--width` | Set animation width |
 | `-H` | `--height` | Set animation height |
 | `-h` | `--help` | Show help message |
@@ -122,7 +132,7 @@ cargo build --release
 - `src/animation.rs` - Frame data and animation rendering
 - `systemd/` - Systemd service files for telnet server integration
 
-## � Credits
+## Credits
 
 - **Original Nyancat animation**: [prguitarman](http://www.prguitarman.com/index.php?id=348)
 - **Original implementation**: [Kevin Lange (klange)](https://github.com/klange/nyancat)

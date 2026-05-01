@@ -2,6 +2,7 @@
 name = "nyancat"
 version = "1.6.0"
 edition = "2024"
+rust-version = "1.85"
 license = "NCSA"
 
 [dependencies]
