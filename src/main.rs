@@ -442,6 +442,8 @@ fn run(config: Config, mut state: RenderState, palette: Palette) -> io::Result<(
     let mut buffer = Vec::with_capacity(32 * 1024);
 
     loop {
+        let frame_start = Instant::now();
+
         if !config.telnet && RESIZE_PENDING.swap(false, Ordering::Relaxed) {
             let (width, height) = terminal_size();
             state.update_terminal_size(width, height);
@@ -468,7 +470,11 @@ fn run(config: Config, mut state: RenderState, palette: Palette) -> io::Result<(
             frame_index = 0;
         }
 
-        thread::sleep(Duration::from_millis(config.delay_ms));
+        let elapsed = frame_start.elapsed();
+        let target_delay = Duration::from_millis(config.delay_ms);
+        if let Some(sleep_time) = target_delay.checked_sub(elapsed) {
+            thread::sleep(sleep_time);
+        }
     }
 }
 
@@ -482,7 +488,7 @@ fn render_frame(
 ) {
     let mut last = 0u8;
     let frame = FRAMES[frame_index];
-    let rainbow = b",,>>&&&+++###==;;;,,";
+    const RAINBOW: &[u8] = b",,>>&&&+++###==;;;,,";
 
     for y in state.min_row..state.max_row {
         for x in state.min_col..state.max_col {
@@ -492,7 +498,7 @@ fn render_frame(
                     mod_x = 1 - mod_x;
                 }
                 let index = (mod_x + y - 23) as usize;
-                rainbow.get(index).copied().unwrap_or(b',')
+                RAINBOW.get(index).copied().unwrap_or(b',')
             } else if !(0..FRAME_HEIGHT).contains(&y) || !(0..FRAME_WIDTH).contains(&x) {
                 b','
             } else {
@@ -519,7 +525,7 @@ fn render_frame(
             out.push(b' ');
         }
         out.extend_from_slice(b"\x1b[1;37m");
-        out.extend_from_slice(format!("You have nyaned for {seconds} seconds!").as_bytes());
+        let _ = write!(out, "You have nyaned for {seconds} seconds!");
         out.extend_from_slice(b"\x1b[J\x1b[0m");
     }
 }
@@ -553,12 +559,10 @@ fn show_intro(out: &mut impl Write, telnet: bool, clear_screen: bool) -> io::Res
         push_newline(&mut buffer, telnet, 1);
         buffer.extend_from_slice(b"                \x1b[1;31m^]quit\x1b[0m to exit");
         push_newline(&mut buffer, telnet, 2);
-        buffer.extend_from_slice(
-            format!(
-                "        Starting in {}...                \n",
-                countdown_clock - k
-            )
-            .as_bytes(),
+        let _ = writeln!(
+            buffer,
+            "        Starting in {}...                ",
+            countdown_clock - k
         );
 
         out.write_all(&buffer)?;
