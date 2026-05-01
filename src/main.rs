@@ -125,7 +125,8 @@ impl TimeoutReader {
 
         let rc = unsafe { sys::poll(&mut fds, 1, timeout_ms) };
         if rc > 0 && (fds.revents & sys::POLLIN) != 0 {
-            let bytes_read = unsafe { sys::read(0, self.buffer.as_mut_ptr().cast(), self.buffer.len()) };
+            let bytes_read =
+                unsafe { sys::read(0, self.buffer.as_mut_ptr().cast(), self.buffer.len()) };
             if bytes_read > 0 {
                 self.head = 1;
                 self.tail = bytes_read as usize;
@@ -569,7 +570,9 @@ fn render_frame(
                 }
                 let index = (mod_x + y - 23) as usize;
                 RAINBOW.get(index).copied().unwrap_or(b',')
-            } else if !(0..FRAME_HEIGHT as i32).contains(&y) || !(0..FRAME_WIDTH as i32).contains(&x) {
+            } else if !(0..FRAME_HEIGHT as i32).contains(&y)
+                || !(0..FRAME_WIDTH as i32).contains(&x)
+            {
                 b','
             } else {
                 frame[y as usize].as_bytes()[x as usize]
@@ -758,8 +761,6 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
 
     Ok(info)
 }
-
-
 
 fn push_newline(out: &mut Vec<u8>, telnet: bool, count: usize) {
     for _ in 0..count {
