@@ -129,10 +129,30 @@ impl TelnetState {
     }
 }
 
+#[derive(Debug, Default, Eq, PartialEq)]
 pub(crate) struct TelnetInfo {
     pub(crate) term: Option<String>,
     pub(crate) width: Option<i32>,
     pub(crate) height: Option<i32>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum Subnegotiation {
+    TerminalType(String),
+    WindowSize { width: i32, height: i32 },
+}
+
+fn parse_subnegotiation(bytes: &[u8]) -> Option<Subnegotiation> {
+    match bytes.first().copied() {
+        Some(TTYPE) if bytes.len() >= 2 => Some(Subnegotiation::TerminalType(
+            String::from_utf8_lossy(&bytes[2..]).into_owned(),
+        )),
+        Some(NAWS) if bytes.len() >= 5 => Some(Subnegotiation::WindowSize {
+            width: u16::from_be_bytes([bytes[1], bytes[2]]) as i32,
+            height: u16::from_be_bytes([bytes[3], bytes[4]]) as i32,
+        }),
+        _ => None,
+    }
 }
 
 pub(crate) fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
@@ -156,11 +176,7 @@ pub(crate) fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
     let mut got_naws = false;
     let mut sb_mode = false;
     let mut sb = Vec::with_capacity(1024);
-    let mut info = TelnetInfo {
-        term: None,
-        width: None,
-        height: None,
-    };
+    let mut info = TelnetInfo::default();
 
     while !got_ttype || !got_naws {
         let Some(byte) = input.read_byte(deadline)? else {
@@ -175,15 +191,19 @@ pub(crate) fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
             match command {
                 SE => {
                     sb_mode = false;
-                    if sb.first().copied() == Some(TTYPE) && sb.len() >= 2 {
-                        info.term = Some(String::from_utf8_lossy(&sb[2..]).into_owned());
-                        got_ttype = true;
-                        deadline = Instant::now() + Duration::from_secs(2);
-                    } else if sb.first().copied() == Some(NAWS) && sb.len() >= 5 {
-                        info.width = Some(u16::from_be_bytes([sb[1], sb[2]]) as i32);
-                        info.height = Some(u16::from_be_bytes([sb[3], sb[4]]) as i32);
-                        got_naws = true;
-                        deadline = Instant::now() + Duration::from_secs(2);
+                    match parse_subnegotiation(&sb) {
+                        Some(Subnegotiation::TerminalType(term)) => {
+                            info.term = Some(term);
+                            got_ttype = true;
+                            deadline = Instant::now() + Duration::from_secs(2);
+                        }
+                        Some(Subnegotiation::WindowSize { width, height }) => {
+                            info.width = Some(width);
+                            info.height = Some(height);
+                            got_naws = true;
+                            deadline = Instant::now() + Duration::from_secs(2);
+                        }
+                        None => {}
                     }
                 }
                 NOP => {
@@ -231,4 +251,36 @@ pub(crate) fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
     }
 
     Ok(info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_terminal_type_subnegotiation() {
+        assert_eq!(
+            parse_subnegotiation(&[TTYPE, 0, b'x', b't', b'e', b'r', b'm']),
+            Some(Subnegotiation::TerminalType("xterm".to_string()))
+        );
+    }
+
+    #[test]
+    fn parses_window_size_subnegotiation() {
+        assert_eq!(
+            parse_subnegotiation(&[NAWS, 0, 120, 0, 40]),
+            Some(Subnegotiation::WindowSize {
+                width: 120,
+                height: 40,
+            })
+        );
+    }
+
+    #[test]
+    fn ignores_incomplete_or_unknown_subnegotiation() {
+        assert_eq!(parse_subnegotiation(&[]), None);
+        assert_eq!(parse_subnegotiation(&[TTYPE]), None);
+        assert_eq!(parse_subnegotiation(&[NAWS, 0, 80, 0]), None);
+        assert_eq!(parse_subnegotiation(&[NEW_ENVIRON, 0]), None);
+    }
 }
