@@ -12,7 +12,7 @@ use runtime::{clear_screen_on_exit, finish, install_signal_handlers, set_clear_s
 use std::env;
 use std::io::{self, Write};
 use telnet::negotiate_telnet;
-use terminal::{detect_terminal_type, terminal_size};
+use terminal::{TerminalType, detect_terminal_type, terminal_size};
 
 fn main() {
     let mut config = Config::default();
@@ -50,15 +50,15 @@ fn main() {
         (env::var("TERM").ok(), width, height)
     };
 
-    let mut ttype = detect_terminal_type(term.as_deref(), terminal_width);
+    let mut terminal_type = detect_terminal_type(term.as_deref(), terminal_width);
     if config.truecolor {
-        ttype = 8;
+        terminal_type = TerminalType::TrueColor;
     }
-    if ttype == 7 {
+    if terminal_type == TerminalType::Vt100Ascii {
         terminal_width = 40;
     }
 
-    let palette = Palette::new(ttype);
+    let palette = Palette::new(terminal_type);
     let mut state = RenderState::new(&config, terminal_width, terminal_height);
     state.finalize_auto_crop();
 

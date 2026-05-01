@@ -1,7 +1,7 @@
 use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES};
 use crate::cli::Config;
 use crate::runtime::{finish, take_resize_pending};
-use crate::terminal::terminal_size;
+use crate::terminal::{TerminalType, terminal_size};
 use std::io::{self, Write};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -73,14 +73,14 @@ pub(crate) struct Palette {
 }
 
 impl Palette {
-    pub(crate) fn new(ttype: u8) -> Self {
+    pub(crate) fn new(terminal_type: TerminalType) -> Self {
         let mut palette = Self {
             colors: [EMPTY; 256],
             output: Some(b"  "),
         };
 
-        match ttype {
-            1 => {
+        match terminal_type {
+            TerminalType::Xterm256 => {
                 palette.colors[b',' as usize] = b"\x1b[48;5;17m";
                 palette.colors[b'.' as usize] = b"\x1b[48;5;231m";
                 palette.colors[b'\'' as usize] = b"\x1b[48;5;16m";
@@ -96,7 +96,7 @@ impl Palette {
                 palette.colors[b'*' as usize] = b"\x1b[48;5;240m";
                 palette.colors[b'%' as usize] = b"\x1b[48;5;175m";
             }
-            2 => {
+            TerminalType::Ansi16 => {
                 palette.colors[b',' as usize] = b"\x1b[104m";
                 palette.colors[b'.' as usize] = b"\x1b[107m";
                 palette.colors[b'\'' as usize] = b"\x1b[40m";
@@ -112,7 +112,7 @@ impl Palette {
                 palette.colors[b'*' as usize] = b"\x1b[100m";
                 palette.colors[b'%' as usize] = b"\x1b[105m";
             }
-            3 => {
+            TerminalType::Linux => {
                 palette.colors[b',' as usize] = b"\x1b[25;44m";
                 palette.colors[b'.' as usize] = b"\x1b[5;47m";
                 palette.colors[b'\'' as usize] = b"\x1b[25;40m";
@@ -128,7 +128,7 @@ impl Palette {
                 palette.colors[b'*' as usize] = b"\x1b[5;40m";
                 palette.colors[b'%' as usize] = b"\x1b[5;45m";
             }
-            4 => {
+            TerminalType::Fallback => {
                 palette.colors[b',' as usize] = b"\x1b[0;34;44m";
                 palette.colors[b'.' as usize] = b"\x1b[1;37;47m";
                 palette.colors[b'\'' as usize] = b"\x1b[0;30;40m";
@@ -145,7 +145,7 @@ impl Palette {
                 palette.colors[b'%' as usize] = b"\x1b[1;35;45m";
                 palette.output = Some("██".as_bytes());
             }
-            5 => {
+            TerminalType::Vtnt => {
                 palette.colors[b',' as usize] = b"\x1b[0;34;44m";
                 palette.colors[b'.' as usize] = b"\x1b[1;37;47m";
                 palette.colors[b'\'' as usize] = b"\x1b[0;30;40m";
@@ -162,7 +162,7 @@ impl Palette {
                 palette.colors[b'%' as usize] = b"\x1b[1;35;45m";
                 palette.output = Some(CP437_BLOCKS);
             }
-            6 => {
+            TerminalType::Vt220 => {
                 palette.colors[b',' as usize] = b"::";
                 palette.colors[b'.' as usize] = b"@@";
                 palette.colors[b'\'' as usize] = b"  ";
@@ -179,7 +179,7 @@ impl Palette {
                 palette.colors[b'%' as usize] = b"()";
                 palette.output = None;
             }
-            7 => {
+            TerminalType::Vt100Ascii => {
                 palette.colors[b',' as usize] = b".";
                 palette.colors[b'.' as usize] = b"@";
                 palette.colors[b'\'' as usize] = b" ";
@@ -196,7 +196,7 @@ impl Palette {
                 palette.colors[b'%' as usize] = b"o";
                 palette.output = None;
             }
-            8 => {
+            TerminalType::TrueColor => {
                 palette.colors[b',' as usize] = b"\x1b[48;2;0;49;105m";
                 palette.colors[b'.' as usize] = b"\x1b[48;2;255;255;255m";
                 palette.colors[b'\'' as usize] = b"\x1b[48;2;0;0;0m";
@@ -212,7 +212,6 @@ impl Palette {
                 palette.colors[b'*' as usize] = b"\x1b[48;2;153;153;153m";
                 palette.colors[b'%' as usize] = b"\x1b[48;2;255;163;152m";
             }
-            _ => {}
         }
 
         palette
