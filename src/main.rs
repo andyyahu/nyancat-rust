@@ -2,8 +2,7 @@ mod animation;
 
 use animation::{FRAMES, FRAME_HEIGHT, FRAME_WIDTH};
 use std::env;
-use std::ffi::c_void;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::process;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -29,48 +28,121 @@ const LINEMODE: u8 = 34;
 const NEW_ENVIRON: u8 = 39;
 const SEND: u8 = 1;
 
-const SIGINT: i32 = 2;
-const SIGPIPE: i32 = 13;
-const SIGWINCH: i32 = 28;
-const POLLIN: i16 = 0x001;
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-const TIOCGWINSZ: usize = 0x5413;
-
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd",
-    target_os = "dragonfly"
-))]
-const TIOCGWINSZ: usize = 0x4008_7468;
-
 static CLEAR_SCREEN_ON_EXIT: AtomicBool = AtomicBool::new(true);
 static RESIZE_PENDING: AtomicBool = AtomicBool::new(false);
 
-#[repr(C)]
-struct Winsize {
-    ws_row: u16,
-    ws_col: u16,
-    ws_xpixel: u16,
-    ws_ypixel: u16,
+pub mod sys {
+    use std::ffi::c_void;
+
+    pub const SIGINT: i32 = 2;
+    pub const SIGPIPE: i32 = 13;
+    pub const SIGWINCH: i32 = 28;
+    pub const POLLIN: i16 = 0x001;
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    pub const TIOCGWINSZ: usize = 0x5413;
+
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    pub const TIOCGWINSZ: usize = 0x4008_7468;
+
+    #[repr(C)]
+    pub struct Winsize {
+        pub ws_row: u16,
+        pub ws_col: u16,
+        pub ws_xpixel: u16,
+        pub ws_ypixel: u16,
+    }
+
+    #[repr(C)]
+    pub struct PollFd {
+        pub fd: i32,
+        pub events: i16,
+        pub revents: i16,
+    }
+
+    unsafe extern "C" {
+        pub fn ioctl(fd: i32, request: usize, ...) -> i32;
+        pub fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
+        pub fn signal(signum: i32, handler: usize) -> usize;
+        pub fn write(fd: i32, buf: *const c_void, count: usize) -> isize;
+        pub fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
+        pub fn _exit(status: i32) -> !;
+    }
+
+    pub fn write_stdout_raw(data: &[u8]) {
+        unsafe {
+            let _ = write(1, data.as_ptr().cast(), data.len());
+        }
+    }
+
+    pub fn exit(status: i32) -> ! {
+        unsafe { _exit(status) }
+    }
 }
 
-#[repr(C)]
-struct PollFd {
-    fd: i32,
-    events: i16,
-    revents: i16,
+struct TimeoutReader {
+    buffer: [u8; 1024],
+    head: usize,
+    tail: usize,
 }
 
-unsafe extern "C" {
-    fn ioctl(fd: i32, request: usize, ...) -> i32;
-    fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
-    fn signal(signum: i32, handler: usize) -> usize;
-    fn write(fd: i32, buf: *const c_void, count: usize) -> isize;
-    fn _exit(status: i32) -> !;
+impl TimeoutReader {
+    fn new() -> Self {
+        Self {
+            buffer: [0; 1024],
+            head: 0,
+            tail: 0,
+        }
+    }
+
+    fn read_byte(&mut self, deadline: std::time::Instant) -> std::io::Result<Option<u8>> {
+        if self.head < self.tail {
+            let byte = self.buffer[self.head];
+            self.head += 1;
+            return Ok(Some(byte));
+        }
+
+        let now = std::time::Instant::now();
+        if now >= deadline {
+            return Ok(None);
+        }
+
+        let timeout = deadline.saturating_duration_since(now);
+        let timeout_ms = timeout.as_millis().min(i32::MAX as u128) as i32;
+
+        let mut fds = sys::PollFd {
+            fd: 0,
+            events: sys::POLLIN,
+            revents: 0,
+        };
+
+        let rc = unsafe { sys::poll(&mut fds, 1, timeout_ms) };
+        if rc > 0 && (fds.revents & sys::POLLIN) != 0 {
+            let bytes_read = unsafe { sys::read(0, self.buffer.as_mut_ptr().cast(), self.buffer.len()) };
+            if bytes_read > 0 {
+                self.head = 1;
+                self.tail = bytes_read as usize;
+                return Ok(Some(self.buffer[0]));
+            } else if bytes_read == 0 {
+                return Ok(None);
+            } else {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == std::io::ErrorKind::Interrupted {
+                    return Ok(None);
+                }
+                return Err(err);
+            }
+        }
+
+        Ok(None)
+    }
 }
 
 #[derive(Clone)]
@@ -606,8 +678,7 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
         }
     }
 
-    let stdin = io::stdin();
-    let mut input = stdin.lock();
+    let mut input = TimeoutReader::new();
     let mut deadline = Instant::now() + Duration::from_secs(1);
     let mut done = 0u8;
     let mut sb_mode = false;
@@ -619,12 +690,12 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
     };
 
     while done < 2 {
-        let Some(byte) = read_byte_until(&mut input, deadline)? else {
+        let Some(byte) = input.read_byte(deadline)? else {
             break;
         };
 
         if byte == IAC {
-            let Some(command) = read_byte_until(&mut input, deadline)? else {
+            let Some(command) = input.read_byte(deadline)? else {
                 break;
             };
 
@@ -647,7 +718,7 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
                     out.flush()?;
                 }
                 WILL | WONT => {
-                    let Some(opt) = read_byte_until(&mut input, deadline)? else {
+                    let Some(opt) = input.read_byte(deadline)? else {
                         break;
                     };
                     if state.willack[opt as usize] == 0 {
@@ -661,7 +732,7 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
                     }
                 }
                 DO | DONT => {
-                    let Some(opt) = read_byte_until(&mut input, deadline)? else {
+                    let Some(opt) = input.read_byte(deadline)? else {
                         break;
                     };
                     if state.options[opt as usize] == 0 {
@@ -687,34 +758,7 @@ fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
     Ok(info)
 }
 
-fn read_byte_until(input: &mut impl Read, deadline: Instant) -> io::Result<Option<u8>> {
-    let now = Instant::now();
-    if now >= deadline {
-        return Ok(None);
-    }
 
-    if !poll_stdin(deadline.saturating_duration_since(now)) {
-        return Ok(None);
-    }
-
-    let mut byte = [0u8; 1];
-    match input.read(&mut byte) {
-        Ok(0) => Ok(None),
-        Ok(_) => Ok(Some(byte[0])),
-        Err(error) if error.kind() == io::ErrorKind::Interrupted => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-
-fn poll_stdin(timeout: Duration) -> bool {
-    let timeout_ms = timeout.as_millis().min(i32::MAX as u128) as i32;
-    let mut fds = PollFd {
-        fd: 0,
-        events: POLLIN,
-        revents: 0,
-    };
-    unsafe { poll(&mut fds, 1, timeout_ms) > 0 && (fds.revents & POLLIN) != 0 }
-}
 
 fn push_newline(out: &mut Vec<u8>, telnet: bool, count: usize) {
     for _ in 0..count {
@@ -727,14 +771,14 @@ fn push_newline(out: &mut Vec<u8>, telnet: bool, count: usize) {
 }
 
 fn terminal_size() -> (i32, i32) {
-    let mut winsize = Winsize {
+    let mut winsize = sys::Winsize {
         ws_row: 0,
         ws_col: 0,
         ws_xpixel: 0,
         ws_ypixel: 0,
     };
 
-    let rc = unsafe { ioctl(0, TIOCGWINSZ, &mut winsize) };
+    let rc = unsafe { sys::ioctl(0, sys::TIOCGWINSZ, &mut winsize) };
     if rc == 0 && winsize.ws_col > 0 && winsize.ws_row > 0 {
         (winsize.ws_col as i32, winsize.ws_row as i32)
     } else {
@@ -914,9 +958,9 @@ fn usage(program: &str) {
 
 fn install_signal_handlers() {
     unsafe {
-        signal(SIGINT, handle_exit_signal as *const () as usize);
-        signal(SIGPIPE, handle_exit_signal as *const () as usize);
-        signal(SIGWINCH, handle_resize_signal as *const () as usize);
+        sys::signal(sys::SIGINT, handle_exit_signal as *const () as usize);
+        sys::signal(sys::SIGPIPE, handle_exit_signal as *const () as usize);
+        sys::signal(sys::SIGWINCH, handle_resize_signal as *const () as usize);
     }
 }
 
@@ -927,10 +971,8 @@ extern "C" fn handle_exit_signal(_: i32) {
         b"\x1b[0m\n" as &[u8]
     };
 
-    unsafe {
-        let _ = write(1, sequence.as_ptr().cast(), sequence.len());
-        _exit(0);
-    }
+    sys::write_stdout_raw(sequence);
+    sys::exit(0);
 }
 
 extern "C" fn handle_resize_signal(_: i32) {
