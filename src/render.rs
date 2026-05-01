@@ -257,7 +257,14 @@ pub(crate) fn run(config: Config, mut state: RenderState, palette: Palette) -> i
             buffer.extend_from_slice(b"\x1b[u");
         }
 
-        render_frame(&mut buffer, &config, &state, &palette, frame_index, start);
+        render_frame(
+            &mut buffer,
+            &config,
+            &state,
+            &palette,
+            frame_index,
+            start.elapsed().as_secs(),
+        );
         stdout.write_all(&buffer)?;
         stdout.flush()?;
 
@@ -285,7 +292,7 @@ fn render_frame(
     state: &RenderState,
     palette: &Palette,
     frame_index: usize,
-    start: Instant,
+    elapsed_seconds: u64,
 ) {
     let mut last = 0u8;
     let frame = FRAMES[frame_index];
@@ -327,13 +334,12 @@ fn render_frame(
     }
 
     if config.show_counter {
-        let seconds = start.elapsed().as_secs();
-        let width = (state.terminal_width - 29 - seconds.to_string().len() as i32) / 2;
+        let width = (state.terminal_width - 29 - elapsed_seconds.to_string().len() as i32) / 2;
         for _ in 0..width.max(0) {
             out.push(b' ');
         }
         out.extend_from_slice(b"\x1b[1;37m");
-        let _ = write!(out, "You have nyaned for {seconds} seconds!");
+        let _ = write!(out, "You have nyaned for {elapsed_seconds} seconds!");
         out.extend_from_slice(b"\x1b[J\x1b[0m");
     }
 }
@@ -397,5 +403,62 @@ fn push_newline(out: &mut Vec<u8>, telnet: bool, count: usize) {
         } else {
             out.push(b'\n');
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render_test_frame(config: &Config, elapsed_seconds: u64) -> Vec<u8> {
+        let mut state = RenderState::new(config, 80, 24);
+        state.finalize_auto_crop();
+        let palette = Palette::new(TerminalType::Vt100Ascii);
+        let mut out = Vec::new();
+
+        render_frame(&mut out, config, &state, &palette, 0, elapsed_seconds);
+
+        out
+    }
+
+    #[test]
+    fn counter_uses_supplied_elapsed_seconds() {
+        let config = Config::default();
+        let out = render_test_frame(&config, 42);
+
+        assert!(
+            out.windows(b"You have nyaned for 42 seconds!".len())
+                .any(|window| window == b"You have nyaned for 42 seconds!")
+        );
+    }
+
+    #[test]
+    fn counter_can_be_disabled() {
+        let config = Config {
+            show_counter: false,
+            ..Config::default()
+        };
+        let out = render_test_frame(&config, 42);
+
+        assert!(
+            !out.windows(b"You have nyaned for".len())
+                .any(|window| window == b"You have nyaned for")
+        );
+    }
+
+    #[test]
+    fn telnet_mode_uses_telnet_newlines() {
+        let config = Config {
+            telnet: true,
+            show_counter: false,
+            ..Config::default()
+        };
+        let out = render_test_frame(&config, 0);
+
+        assert!(
+            out.windows(b"\r\0\n".len())
+                .any(|window| window == b"\r\0\n")
+        );
+        assert!(!out.windows(b"\n\n".len()).any(|window| window == b"\n\n"));
     }
 }
