@@ -10,6 +10,8 @@
 
 - **High-performance animation** - Written in Rust for speed and efficiency
 - **Terminal rendering** - Works in any ANSI-compatible terminal
+- **TrueColor support** - Optional 24-bit high-definition rendering mode
+- **Benchmark mode** - Zero-delay rendering for performance testing
 - **Telnet server** - Share Nyancat over the network with telnet
 - **Cross-platform** - Supports Linux, macOS, BSD, and other Unix-like systems
 - **Minimal dependencies** - No external crates required
@@ -29,14 +31,17 @@ The Rust edition is optimized for high-throughput rendering. In our benchmarks, 
 
 ## 🚀 Quick Start
 
-### Build from source
+### Build and Run
 
 ```bash
-make
-./src/nyancat
+# Build the release version
+cargo build --release
+
+# Run the animation
+./target/release/nyancat
 ```
 
-Or use Cargo directly:
+Or run directly with Cargo:
 
 ```bash
 cargo run --release
@@ -61,8 +66,9 @@ For production setups, integrate with `systemd`, `xinetd`, or `openbsd-inetd`. E
 ### From source
 
 ```bash
-make
-sudo make install
+cargo build --release
+# Optionally copy to your bin folder
+cp target/release/nyancat /usr/local/bin/
 ```
 
 ## 💻 Usage
@@ -80,6 +86,23 @@ nyancat -b
 # Run in high-definition TrueColor mode
 nyancat -T
 ```
+
+### Command Line Options
+
+| Flag | Long Option | Description |
+| :--- | :--- | :--- |
+| `-i` | `--intro` | Show introduction at startup |
+| `-t` | `--telnet` | Enable Telnet server mode |
+| `-T` | `--truecolor` | Enable 24-bit TrueColor rendering |
+| `-n` | `--no-counter` | Do not display the timer |
+| `-s` | `--no-title` | Do not set titlebar text |
+| `-e` | `--no-clear` | Do not clear screen between frames |
+| `-b` | `--benchmark` | Run with 0ms delay (Warning: high CPU) |
+| `-d` | `--delay` | Set delay (10ms - 1000ms) |
+| `-f` | `--frames` | Quit after N frames |
+| `-W` | `--width` | Set animation width |
+| `-H` | `--height` | Set animation height |
+| `-h` | `--help` | Show help message |
 
 ## 🔧 Development
 
