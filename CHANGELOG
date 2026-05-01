@@ -3,6 +3,8 @@
     * Improved performance and reduced memory footprint
     * This is a community rewrite based on the original C implementation by K. Lange
     * Original Nyancat animation by prguitarman
+    * Transitioned to a pure Cargo build system (removed legacy Makefiles)
+    * Enabled aggressive release optimizations (LTO, native CPU, opt-level 3, panic=abort)
 
 1.4.1
     * Fix telnet size negotiation
