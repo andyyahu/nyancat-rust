@@ -1,6 +1,7 @@
 use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH};
-use std::process;
+use std::fmt;
 
+#[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Config {
     pub(crate) telnet: bool,
     pub(crate) show_counter: bool,
@@ -17,6 +18,55 @@ pub(crate) struct Config {
     pub(crate) min_col: i32,
     pub(crate) max_col: i32,
 }
+
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum CliAction {
+    Run(Config),
+    Help { program: String },
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum CliError {
+    MissingValue {
+        option: String,
+    },
+    InvalidValue {
+        option: String,
+        value: String,
+    },
+    ValueOutOfRange {
+        option: String,
+        value: i32,
+        min: i32,
+        max: i32,
+    },
+    UnknownOption {
+        option: String,
+    },
+}
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingValue { option } => write!(f, "missing value for {option}"),
+            Self::InvalidValue { option, value } => {
+                write!(f, "invalid value for {option}: {value}")
+            }
+            Self::ValueOutOfRange {
+                option,
+                value,
+                min,
+                max,
+            } => write!(
+                f,
+                "value for {option} out of range: {value} (expected {min}-{max})"
+            ),
+            Self::UnknownOption { option } => write!(f, "unknown option: {option}"),
+        }
+    }
+}
+
+impl std::error::Error for CliError {}
 
 impl Default for Config {
     fn default() -> Self {
@@ -39,7 +89,12 @@ impl Default for Config {
     }
 }
 
-pub(crate) fn parse_args(args: &[String], config: &mut Config) {
+pub(crate) fn parse_args(args: &[String]) -> Result<CliAction, CliError> {
+    let program = args
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "nyancat".to_string());
+    let mut config = Config::default();
     let mut i = 1usize;
     while i < args.len() {
         let arg = &args[i];
@@ -53,8 +108,9 @@ pub(crate) fn parse_args(args: &[String], config: &mut Config) {
             });
             match name {
                 "help" => {
-                    usage(&args[0]);
-                    process::exit(0);
+                    return Ok(CliAction::Help {
+                        program: program.clone(),
+                    });
                 }
                 "telnet" => config.telnet = true,
                 "intro" => config.show_intro = true,
@@ -66,13 +122,23 @@ pub(crate) fn parse_args(args: &[String], config: &mut Config) {
                 "truecolor" => config.truecolor = true,
                 "delay" | "frames" | "min-rows" | "max-rows" | "min-cols" | "max-cols"
                 | "width" | "height" => {
-                    let value = value.unwrap_or_else(|| {
-                        i += 1;
-                        args.get(i).cloned().unwrap_or_default()
-                    });
-                    apply_option(config, long_to_short(name), &value);
+                    let option = format!("--{name}");
+                    let value = match value {
+                        Some(value) => value,
+                        None => {
+                            i += 1;
+                            args.get(i).cloned().ok_or_else(|| CliError::MissingValue {
+                                option: option.clone(),
+                            })?
+                        }
+                    };
+                    apply_option(&mut config, long_to_short(name), &option, &value)?;
                 }
-                _ => {}
+                _ => {
+                    return Err(CliError::UnknownOption {
+                        option: format!("--{name}"),
+                    });
+                }
             }
         } else if arg.starts_with('-') && arg.len() > 1 {
             let bytes = arg.as_bytes();
@@ -81,24 +147,35 @@ pub(crate) fn parse_args(args: &[String], config: &mut Config) {
                 let opt = bytes[pos] as char;
                 pos += 1;
                 if option_requires_value(opt) {
+                    let option = format!("-{opt}");
                     let value = if pos < bytes.len() {
                         String::from_utf8_lossy(&bytes[pos..]).into_owned()
                     } else {
                         i += 1;
-                        args.get(i).cloned().unwrap_or_default()
+                        args.get(i).cloned().ok_or_else(|| CliError::MissingValue {
+                            option: option.clone(),
+                        })?
                     };
-                    apply_option(config, opt, &value);
+                    apply_option(&mut config, opt, &option, &value)?;
                     break;
                 }
-                apply_flag(config, opt, &args[0]);
+                if let Some(action) = apply_flag(&mut config, opt, &program)? {
+                    return Ok(action);
+                }
             }
         }
 
         i += 1;
     }
+
+    Ok(CliAction::Run(config))
 }
 
-fn apply_flag(config: &mut Config, opt: char, program: &str) {
+fn apply_flag(
+    config: &mut Config,
+    opt: char,
+    program: &str,
+) -> Result<Option<CliAction>, CliError> {
     match opt {
         'e' => config.clear_screen = false,
         's' => config.set_title = false,
@@ -108,18 +185,37 @@ fn apply_flag(config: &mut Config, opt: char, program: &str) {
         'b' => config.benchmark = true,
         'T' => config.truecolor = true,
         'h' => {
-            usage(program);
-            process::exit(0);
+            return Ok(Some(CliAction::Help {
+                program: program.to_string(),
+            }));
         }
         'n' => config.show_counter = false,
-        _ => {}
+        _ => {
+            return Err(CliError::UnknownOption {
+                option: format!("-{opt}"),
+            });
+        }
     }
+
+    Ok(None)
 }
 
-fn apply_option(config: &mut Config, opt: char, value: &str) {
-    let parsed = value.parse::<i32>().unwrap_or(0);
+fn apply_option(config: &mut Config, opt: char, option: &str, value: &str) -> Result<(), CliError> {
+    let parsed = value.parse::<i32>().map_err(|_| CliError::InvalidValue {
+        option: option.to_string(),
+        value: value.to_string(),
+    })?;
+
     match opt {
-        'd' if (10..=1000).contains(&parsed) => {
+        'd' => {
+            if !(10..=1000).contains(&parsed) {
+                return Err(CliError::ValueOutOfRange {
+                    option: option.to_string(),
+                    value: parsed,
+                    min: 10,
+                    max: 1000,
+                });
+            }
             config.delay_ms = parsed as u64;
         }
         'f' => config.frame_count = parsed.max(0) as u32,
@@ -135,8 +231,14 @@ fn apply_option(config: &mut Config, opt: char, value: &str) {
             config.min_row = (FRAME_HEIGHT as i32 - parsed) / 2;
             config.max_row = (FRAME_HEIGHT as i32 + parsed) / 2;
         }
-        _ => {}
+        _ => {
+            return Err(CliError::UnknownOption {
+                option: option.to_string(),
+            });
+        }
     }
+
+    Ok(())
 }
 
 fn long_to_short(name: &str) -> char {
@@ -157,7 +259,7 @@ fn option_requires_value(opt: char) -> bool {
     matches!(opt, 'd' | 'f' | 'r' | 'R' | 'c' | 'C' | 'W' | 'H')
 }
 
-fn usage(program: &str) {
+pub(crate) fn print_usage(program: &str) {
     println!(
         "Terminal Nyancat\n\
          \n\
@@ -190,15 +292,14 @@ mod tests {
     #[test]
     fn width_and_height_options_center_crop() {
         let mut config = Config::default();
-        apply_option(&mut config, 'W', "40");
-        apply_option(&mut config, 'H', "24");
+        apply_option(&mut config, 'W', "-W", "40").unwrap();
+        apply_option(&mut config, 'H', "-H", "24").unwrap();
         assert_eq!((config.min_col, config.max_col), (12, 52));
         assert_eq!((config.min_row, config.max_row), (20, 44));
     }
 
     #[test]
     fn parses_short_flags_and_options() {
-        let mut config = Config::default();
         let args = vec![
             "nyancat".to_string(),
             "-Tnse".to_string(),
@@ -211,7 +312,9 @@ mod tests {
             "24".to_string(),
         ];
 
-        parse_args(&args, &mut config);
+        let CliAction::Run(config) = parse_args(&args).unwrap() else {
+            panic!("expected run action");
+        };
 
         assert!(config.truecolor);
         assert!(!config.show_counter);
@@ -225,13 +328,60 @@ mod tests {
     }
 
     #[test]
-    fn invalid_delay_keeps_default() {
+    fn help_is_returned_without_exiting() {
+        let args = vec!["nyancat".to_string(), "--help".to_string()];
+
+        assert_eq!(
+            parse_args(&args),
+            Ok(CliAction::Help {
+                program: "nyancat".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn invalid_delay_is_reported() {
         let mut config = Config::default();
 
-        apply_option(&mut config, 'd', "9");
-        apply_option(&mut config, 'd', "1001");
-        apply_option(&mut config, 'd', "not-a-number");
+        assert_eq!(
+            apply_option(&mut config, 'd', "-d", "9"),
+            Err(CliError::ValueOutOfRange {
+                option: "-d".to_string(),
+                value: 9,
+                min: 10,
+                max: 1000,
+            })
+        );
+        assert_eq!(
+            apply_option(&mut config, 'd', "-d", "not-a-number"),
+            Err(CliError::InvalidValue {
+                option: "-d".to_string(),
+                value: "not-a-number".to_string(),
+            })
+        );
+    }
 
-        assert_eq!(config.delay_ms, 90);
+    #[test]
+    fn missing_option_value_is_reported() {
+        let args = vec!["nyancat".to_string(), "-d".to_string()];
+
+        assert_eq!(
+            parse_args(&args),
+            Err(CliError::MissingValue {
+                option: "-d".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn unknown_option_is_reported() {
+        let args = vec!["nyancat".to_string(), "--wat".to_string()];
+
+        assert_eq!(
+            parse_args(&args),
+            Err(CliError::UnknownOption {
+                option: "--wat".to_string()
+            })
+        );
     }
 }

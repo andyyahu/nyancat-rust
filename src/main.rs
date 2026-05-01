@@ -6,18 +6,30 @@ mod sys;
 mod telnet;
 mod terminal;
 
-use cli::{Config, parse_args};
+use cli::{CliAction, parse_args, print_usage};
 use render::{Palette, RenderState, run};
 use runtime::{clear_screen_on_exit, finish, install_signal_handlers, set_clear_screen_on_exit};
 use std::env;
 use std::io::{self, Write};
+use std::process;
 use telnet::negotiate_telnet;
 use terminal::{TerminalType, detect_terminal_type, terminal_size};
 
 fn main() {
-    let mut config = Config::default();
     let args: Vec<String> = env::args().collect();
-    parse_args(&args, &mut config);
+    let mut config = match parse_args(&args) {
+        Ok(CliAction::Run(config)) => config,
+        Ok(CliAction::Help { program }) => {
+            print_usage(&program);
+            return;
+        }
+        Err(error) => {
+            let program = args.first().map_or("nyancat", String::as_str);
+            let _ = writeln!(io::stderr(), "nyancat: {error}");
+            let _ = writeln!(io::stderr(), "Try '{program} --help' for usage.");
+            process::exit(1);
+        }
+    };
 
     if config.benchmark {
         config.delay_ms = 0;
