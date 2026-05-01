@@ -128,8 +128,14 @@ cargo build --release
 
 ### Project structure
 
-- `src/main.rs` - Main application logic with telnet protocol handling
-- `src/animation.rs` - Frame data and animation rendering
+- `src/main.rs` - Startup orchestration
+- `src/animation.rs` - Frame data
+- `src/cli.rs` - Command-line parsing and configuration
+- `src/render.rs` - Palette setup and animation rendering
+- `src/telnet.rs` - Telnet negotiation
+- `src/terminal.rs` - Terminal size and type detection
+- `src/runtime.rs` - Exit and signal handling
+- `src/sys.rs` - Unix FFI bindings
 - `systemd/` - Systemd service files for telnet server integration
 
 ## Credits
