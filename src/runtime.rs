@@ -5,19 +5,38 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static CLEAR_SCREEN_ON_EXIT: AtomicBool = AtomicBool::new(true);
 static RESIZE_PENDING: AtomicBool = AtomicBool::new(false);
 
-pub(crate) fn set_clear_screen_on_exit(clear_screen: bool) {
+fn set_clear_screen_on_exit(clear_screen: bool) {
     CLEAR_SCREEN_ON_EXIT.store(clear_screen, Ordering::Relaxed);
-}
-
-pub(crate) fn clear_screen_on_exit() -> bool {
-    CLEAR_SCREEN_ON_EXIT.load(Ordering::Relaxed)
 }
 
 pub(crate) fn take_resize_pending() -> bool {
     RESIZE_PENDING.swap(false, Ordering::Relaxed)
 }
 
-pub(crate) fn install_signal_handlers() {
+pub(crate) struct TerminalSession {
+    clear_screen: bool,
+}
+
+impl TerminalSession {
+    pub(crate) fn new(clear_screen: bool) -> Self {
+        set_clear_screen_on_exit(clear_screen);
+        install_signal_handlers();
+        Self { clear_screen }
+    }
+
+    pub(crate) fn set_clear_screen(&mut self, clear_screen: bool) {
+        self.clear_screen = clear_screen;
+        set_clear_screen_on_exit(clear_screen);
+    }
+}
+
+impl Drop for TerminalSession {
+    fn drop(&mut self) {
+        let _ = restore_terminal(self.clear_screen);
+    }
+}
+
+fn install_signal_handlers() {
     sys::install_signal_handler(sys::SIGINT, handle_exit_signal);
     sys::install_signal_handler(sys::SIGPIPE, handle_exit_signal);
     sys::install_signal_handler(sys::SIGWINCH, handle_resize_signal);
@@ -34,7 +53,7 @@ extern "C" fn handle_resize_signal(_: i32) {
     RESIZE_PENDING.store(true, Ordering::Relaxed);
 }
 
-pub(crate) fn restore_terminal(clear_screen: bool) -> io::Result<()> {
+fn restore_terminal(clear_screen: bool) -> io::Result<()> {
     let mut stdout = io::stdout().lock();
     stdout.write_all(restore_sequence(clear_screen))?;
     stdout.flush()

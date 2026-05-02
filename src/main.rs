@@ -8,9 +8,7 @@ mod terminal;
 
 use cli::{CliAction, parse_args, print_usage};
 use render::{Palette, RenderState, RunOutcome, run};
-use runtime::{
-    clear_screen_on_exit, install_signal_handlers, restore_terminal, set_clear_screen_on_exit,
-};
+use runtime::TerminalSession;
 use std::env;
 use std::io::{self, Write};
 use std::process::ExitCode;
@@ -45,14 +43,13 @@ fn main() -> ExitCode {
         config.show_intro = true;
     }
 
-    set_clear_screen_on_exit(config.clear_screen);
-    install_signal_handlers();
+    let mut terminal_session = TerminalSession::new(config.clear_screen);
 
     let (term, mut terminal_size) = if config.telnet {
         let mut stdout = io::stdout().lock();
         let info = match negotiate_telnet(&mut stdout) {
             Ok(info) => info,
-            Err(_) => return restore_and_succeed(config.clear_screen),
+            Err(_) => return ExitCode::SUCCESS,
         };
         (info.term, info.size.unwrap_or_default())
     } else {
@@ -72,18 +69,16 @@ fn main() -> ExitCode {
     state.finalize_auto_crop();
 
     match run(config, state, palette) {
-        Ok(RunOutcome::FrameLimitReached { clear_screen }) => restore_and_succeed(clear_screen),
+        Ok(RunOutcome::FrameLimitReached { clear_screen }) => {
+            terminal_session.set_clear_screen(clear_screen);
+            ExitCode::SUCCESS
+        }
         Err(error) => {
             if error.kind() == io::ErrorKind::BrokenPipe {
-                return restore_and_succeed(clear_screen_on_exit());
+                return ExitCode::SUCCESS;
             }
             let _ = writeln!(io::stderr(), "nyancat: {error}");
-            restore_and_succeed(clear_screen_on_exit())
+            ExitCode::SUCCESS
         }
     }
-}
-
-fn restore_and_succeed(clear_screen: bool) -> ExitCode {
-    let _ = restore_terminal(clear_screen);
-    ExitCode::SUCCESS
 }
