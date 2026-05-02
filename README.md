@@ -138,6 +138,10 @@ cargo build --release
 - `src/sys.rs` - Unix FFI bindings
 - `systemd/` - Systemd service files for telnet server integration
 
+### Refactoring roadmap
+
+See [`RUSTIFICATION_PLAN.md`](RUSTIFICATION_PLAN.md) for the ongoing plan to move the codebase away from C-style Rust toward a more idiomatic, testable, and performance-conscious Rust design.
+
 ## Credits
 
 - **Original Nyancat animation**: [prguitarman](http://www.prguitarman.com/index.php?id=348)
