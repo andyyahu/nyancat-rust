@@ -23,6 +23,38 @@ check_bytes() {
     fi
 }
 
+check_contains() {
+    file=$1
+    pattern=$2
+    label=$3
+    if ! LC_ALL=C grep -F "$pattern" "$file" > /dev/null; then
+        echo "missing $label in $file" >&2
+        exit 1
+    fi
+}
+
+check_absent() {
+    file=$1
+    pattern=$2
+    label=$3
+    if LC_ALL=C grep -F "$pattern" "$file" > /dev/null; then
+        echo "unexpected $label in $file" >&2
+        exit 1
+    fi
+}
+
+check_char_count() {
+    file=$1
+    chars=$2
+    expected=$3
+    label=$4
+    actual=$(LC_ALL=C tr -cd "$chars" < "$file" | wc -c | tr -d ' ')
+    if [ "$actual" != "$expected" ]; then
+        echo "character count mismatch for $label in $file: expected $expected, got $actual" >&2
+        exit 1
+    fi
+}
+
 echo "== cargo fmt --check =="
 cargo fmt --check
 
@@ -48,6 +80,27 @@ check_bytes "$telnet_out" 3067
 check_bytes "$truecolor_out" 5175
 check_bytes "$crop_out" 4083
 check_bytes "$benchmark_out" 11916
+
+esc=$(printf '\033')
+telnet_iac_wont_echo=$(printf '\377\374\001')
+
+check_contains "$normal_out" "${esc}[s${esc}[u${esc}[48;5;17m" "xterm frame prefix"
+check_contains "$normal_out" "${esc}[48;5;196m" "xterm rainbow red"
+check_absent "$normal_out" "${esc}[48;2;" "truecolor escape sequence"
+check_absent "$normal_out" "You have nyaned for" "counter text"
+
+check_contains "$truecolor_out" "${esc}[s${esc}[u${esc}[48;2;0;49;105m" "truecolor frame prefix"
+check_contains "$truecolor_out" "${esc}[48;2;255;25;0m" "truecolor rainbow red"
+check_absent "$truecolor_out" "${esc}[48;5;" "256-color escape sequence"
+
+check_contains "$crop_out" "${esc}[s${esc}[u${esc}[48;5;17m" "cropped frame prefix"
+check_absent "$benchmark_out" "You have nyaned for" "benchmark counter text"
+
+check_contains "$telnet_out" "$telnet_iac_wont_echo" "telnet negotiation prefix"
+check_contains "$telnet_out" "${esc}[s${esc}[u${esc}[104m" "telnet ANSI frame prefix"
+check_char_count "$normal_out" '\000' 0 "normal NUL bytes"
+check_char_count "$telnet_out" '\000' 23 "telnet NUL newline bytes"
+check_char_count "$telnet_out" '\015' 23 "telnet CR newline bytes"
 
 if "$BIN" --wat > "$cli_err" 2>&1; then
     echo "expected CLI error smoke to fail" >&2

@@ -659,16 +659,34 @@ fn show_intro(out: &mut impl Write, telnet: bool, clear_screen: bool) -> io::Res
 mod tests {
     use super::*;
 
-    fn render_test_frame(config: &Config, elapsed_seconds: u64) -> Vec<u8> {
-        let mut state = RenderState::new(config, TerminalSize::new(80, 24));
+    fn bytes_contain(bytes: &[u8], needle: &[u8]) -> bool {
+        bytes.windows(needle.len()).any(|window| window == needle)
+    }
+
+    fn render_test_frame_for_terminal(
+        config: &Config,
+        terminal_type: TerminalType,
+        terminal_size: TerminalSize,
+        elapsed_seconds: u64,
+    ) -> Vec<u8> {
+        let mut state = RenderState::new(config, terminal_size);
         state.finalize_auto_crop();
-        let palette = Palette::new(TerminalType::Vt100Ascii);
+        let palette = Palette::new(terminal_type);
         let renderer = Renderer::new(config, &palette);
         let mut out = FrameBuffer::with_capacity(32 * 1024);
 
         renderer.render_frame(&mut out, &state, 0, elapsed_seconds);
 
         out.into_bytes()
+    }
+
+    fn render_test_frame(config: &Config, elapsed_seconds: u64) -> Vec<u8> {
+        render_test_frame_for_terminal(
+            config,
+            TerminalType::Vt100Ascii,
+            TerminalSize::new(80, 24),
+            elapsed_seconds,
+        )
     }
 
     #[test]
@@ -788,14 +806,65 @@ mod tests {
     }
 
     #[test]
+    fn xterm_frame_uses_256_color_sequences() {
+        let config = Config {
+            show_counter: false,
+            ..Config::default()
+        };
+        let out = render_test_frame_for_terminal(
+            &config,
+            TerminalType::Xterm256,
+            TerminalSize::new(80, 24),
+            0,
+        );
+
+        assert!(bytes_contain(&out, b"\x1b[48;5;17m"));
+        assert!(bytes_contain(&out, b"\x1b[48;5;196m"));
+        assert!(!bytes_contain(&out, b"\x1b[48;2;"));
+    }
+
+    #[test]
+    fn truecolor_frame_uses_24_bit_color_sequences() {
+        let config = Config {
+            show_counter: false,
+            ..Config::default()
+        };
+        let out = render_test_frame_for_terminal(
+            &config,
+            TerminalType::TrueColor,
+            TerminalSize::new(80, 24),
+            0,
+        );
+
+        assert!(bytes_contain(&out, b"\x1b[48;2;0;49;105m"));
+        assert!(bytes_contain(&out, b"\x1b[48;2;255;25;0m"));
+        assert!(!bytes_contain(&out, b"\x1b[48;5;"));
+    }
+
+    #[test]
+    fn vt100_ascii_frame_uses_plain_text_symbols() {
+        let config = Config {
+            show_counter: false,
+            ..Config::default()
+        };
+        let out = render_test_frame_for_terminal(
+            &config,
+            TerminalType::Vt100Ascii,
+            TerminalSize::new(40, 24),
+            0,
+        );
+
+        assert!(bytes_contain(&out, b"@"));
+        assert!(bytes_contain(&out, b"#"));
+        assert!(!bytes_contain(&out, b"\x1b["));
+    }
+
+    #[test]
     fn counter_uses_supplied_elapsed_seconds() {
         let config = Config::default();
         let out = render_test_frame(&config, 42);
 
-        assert!(
-            out.windows(b"You have nyaned for 42 seconds!".len())
-                .any(|window| window == b"You have nyaned for 42 seconds!")
-        );
+        assert!(bytes_contain(&out, b"You have nyaned for 42 seconds!"));
     }
 
     #[test]
@@ -806,10 +875,7 @@ mod tests {
         };
         let out = render_test_frame(&config, 42);
 
-        assert!(
-            !out.windows(b"You have nyaned for".len())
-                .any(|window| window == b"You have nyaned for")
-        );
+        assert!(!bytes_contain(&out, b"You have nyaned for"));
     }
 
     #[test]
@@ -821,10 +887,7 @@ mod tests {
         };
         let out = render_test_frame(&config, 0);
 
-        assert!(
-            out.windows(b"\r\0\n".len())
-                .any(|window| window == b"\r\0\n")
-        );
-        assert!(!out.windows(b"\n\n".len()).any(|window| window == b"\n\n"));
+        assert!(bytes_contain(&out, b"\r\0\n"));
+        assert!(!bytes_contain(&out, b"\n\n"));
     }
 }

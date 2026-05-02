@@ -25,7 +25,7 @@ The script covers:
 - `cargo test --locked`
 - `cargo clippy --locked --all-targets --all-features -- -D warnings`
 - `cargo build --release --locked`
-- Smoke tests, byte count checks, CLI error checks, and `--help` option coverage
+- Smoke tests, byte count checks, output marker checks, CLI error checks, and `--help` option coverage
 
 GitHub Actions also runs the release check on stable Rust and a separate MSRV build/test job for Rust 1.85.0.
 
@@ -66,6 +66,13 @@ The benchmark smoke stderr must include:
 ```text
 benchmark: frames=3
 ```
+
+The automated smoke checks also verify key output markers:
+
+- xterm output uses 256-color escape sequences and does not emit TrueColor sequences.
+- TrueColor output uses 24-bit escape sequences and does not emit 256-color sequences.
+- telnet output starts with negotiation bytes and uses CR NUL LF newline markers.
+- `--no-counter` smoke paths do not print counter text.
 
 ## Benchmark Snapshot
 
