@@ -53,10 +53,9 @@ impl ByteSource for TimeoutReader {
             return Ok(None);
         }
 
-        let timeout = deadline.saturating_duration_since(now);
-        let timeout_ms = timeout.as_millis().min(i32::MAX as u128) as i32;
+        let timeout = sys::PollTimeout::from_duration(deadline.saturating_duration_since(now));
 
-        if sys::stdin_ready(timeout_ms) {
+        if sys::stdin_ready(timeout) {
             if let Some(bytes_read) = sys::read_stdin(&mut self.buffer)? {
                 self.head = 1;
                 self.tail = bytes_read;

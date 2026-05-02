@@ -1,9 +1,10 @@
 use std::ffi::c_void;
 use std::io;
+use std::time::Duration;
 
-pub const SIGINT: i32 = 2;
-pub const SIGPIPE: i32 = 13;
-pub const SIGWINCH: i32 = 28;
+const SIGINT: i32 = 2;
+const SIGPIPE: i32 = 13;
+const SIGWINCH: i32 = 28;
 const POLLIN: i16 = 0x001;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -20,6 +21,48 @@ const TIOCGWINSZ: usize = 0x5413;
 const TIOCGWINSZ: usize = 0x4008_7468;
 
 pub type SignalHandler = extern "C" fn(i32);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Signal {
+    Interrupt,
+    Pipe,
+    WindowChanged,
+}
+
+impl Signal {
+    const fn number(self) -> i32 {
+        match self {
+            Self::Interrupt => SIGINT,
+            Self::Pipe => SIGPIPE,
+            Self::WindowChanged => SIGWINCH,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PollTimeout(i32);
+
+impl PollTimeout {
+    pub fn from_duration(duration: Duration) -> Self {
+        Self(duration.as_millis().min(i32::MAX as u128) as i32)
+    }
+
+    const fn as_raw(self) -> i32 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct Fd(i32);
+
+impl Fd {
+    const STDIN: Self = Self(0);
+    const STDOUT: Self = Self(1);
+
+    const fn as_raw(self) -> i32 {
+        self.0
+    }
+}
 
 #[repr(C)]
 struct Winsize {
@@ -45,9 +88,9 @@ unsafe extern "C" {
     fn _exit(status: i32) -> !;
 }
 
-pub fn install_signal_handler(signum: i32, handler: SignalHandler) {
+pub fn install_signal_handler(signal_kind: Signal, handler: SignalHandler) {
     unsafe {
-        signal(signum, handler as *const () as usize);
+        signal(signal_kind.number(), handler as *const () as usize);
     }
 }
 
@@ -59,7 +102,7 @@ pub fn stdin_terminal_size() -> Option<(i32, i32)> {
         ws_ypixel: 0,
     };
 
-    let rc = unsafe { ioctl(0, TIOCGWINSZ, &mut winsize) };
+    let rc = unsafe { ioctl(Fd::STDIN.as_raw(), TIOCGWINSZ, &mut winsize) };
     if rc == 0 && winsize.ws_col > 0 && winsize.ws_row > 0 {
         Some((winsize.ws_col as i32, winsize.ws_row as i32))
     } else {
@@ -67,19 +110,19 @@ pub fn stdin_terminal_size() -> Option<(i32, i32)> {
     }
 }
 
-pub fn stdin_ready(timeout_ms: i32) -> bool {
+pub fn stdin_ready(timeout: PollTimeout) -> bool {
     let mut fds = PollFd {
-        fd: 0,
+        fd: Fd::STDIN.as_raw(),
         events: POLLIN,
         revents: 0,
     };
 
-    let rc = unsafe { poll(&mut fds, 1, timeout_ms) };
+    let rc = unsafe { poll(&mut fds, 1, timeout.as_raw()) };
     rc > 0 && (fds.revents & POLLIN) != 0
 }
 
 pub fn read_stdin(buffer: &mut [u8]) -> io::Result<Option<usize>> {
-    let bytes_read = unsafe { read(0, buffer.as_mut_ptr().cast(), buffer.len()) };
+    let bytes_read = unsafe { read(Fd::STDIN.as_raw(), buffer.as_mut_ptr().cast(), buffer.len()) };
     if bytes_read > 0 {
         Ok(Some(bytes_read as usize))
     } else if bytes_read == 0 {
@@ -96,10 +139,34 @@ pub fn read_stdin(buffer: &mut [u8]) -> io::Result<Option<usize>> {
 
 pub fn write_stdout_raw(data: &[u8]) {
     unsafe {
-        let _ = write(1, data.as_ptr().cast(), data.len());
+        let _ = write(Fd::STDOUT.as_raw(), data.as_ptr().cast(), data.len());
     }
 }
 
 pub fn exit(status: i32) -> ! {
     unsafe { _exit(status) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signal_numbers_match_existing_unix_values() {
+        assert_eq!(Signal::Interrupt.number(), SIGINT);
+        assert_eq!(Signal::Pipe.number(), SIGPIPE);
+        assert_eq!(Signal::WindowChanged.number(), SIGWINCH);
+    }
+
+    #[test]
+    fn poll_timeout_clamps_to_platform_limit() {
+        assert_eq!(
+            PollTimeout::from_duration(Duration::from_millis(250)).as_raw(),
+            250
+        );
+        assert_eq!(
+            PollTimeout::from_duration(Duration::from_millis(i32::MAX as u64 + 1)).as_raw(),
+            i32::MAX
+        );
+    }
 }

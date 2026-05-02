@@ -37,9 +37,9 @@ impl Drop for TerminalSession {
 }
 
 fn install_signal_handlers() {
-    sys::install_signal_handler(sys::SIGINT, handle_exit_signal);
-    sys::install_signal_handler(sys::SIGPIPE, handle_exit_signal);
-    sys::install_signal_handler(sys::SIGWINCH, handle_resize_signal);
+    sys::install_signal_handler(sys::Signal::Interrupt, handle_exit_signal);
+    sys::install_signal_handler(sys::Signal::Pipe, handle_exit_signal);
+    sys::install_signal_handler(sys::Signal::WindowChanged, handle_resize_signal);
 }
 
 extern "C" fn handle_exit_signal(_: i32) {
