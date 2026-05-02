@@ -1,0 +1,114 @@
+# Architecture
+
+This document records the current module boundaries and the design constraints that keep the Rust edition maintainable, testable, and performance-conscious.
+
+## Design Goals
+
+- Keep terminal animation output compatible with the historical nyancat behavior.
+- Keep the render path allocation-light and predictable.
+- Keep Unix FFI and unsafe calls behind a small safe API.
+- Keep command-line parsing, telnet negotiation, terminal detection, rendering, and runtime cleanup independently testable.
+- Prefer small typed boundaries over broad framework-style abstractions.
+
+## Startup Flow
+
+`main.rs` owns process orchestration:
+
+1. Parse arguments with `cli::parse_args`.
+2. Apply benchmark and telnet startup policy.
+3. Install terminal/session cleanup through `runtime::TerminalSession`.
+4. Negotiate telnet metadata when `--telnet` is active.
+5. Detect terminal type and create `render::Palette`.
+6. Create `render::RenderState` and run `render::run`.
+7. Restore the terminal before printing deferred benchmark reports or runtime errors.
+
+`main.rs` should stay thin. New behavior should usually live in the module that owns the relevant domain.
+
+## Module Boundaries
+
+| Module | Ownership |
+| :--- | :--- |
+| `animation.rs` | Raw frame data, frame dimensions, `FrameSymbol`, and frame symbol accessors. |
+| `cli.rs` | `Config`, crop option types, CLI actions, CLI errors, and option parsing. |
+| `terminal.rs` | Terminal size detection adapter and terminal type classification. |
+| `telnet.rs` | Telnet parser, negotiation state, byte-source abstraction, and negotiated terminal metadata. |
+| `render.rs` | Palette construction, frame rendering, render loop timing, frame buffer output, and benchmark stats. |
+| `runtime.rs` | Terminal restore sequences, signal handlers, resize flag, and session RAII guard. |
+| `sys.rs` | Unix FFI declarations and safe wrappers for signals, poll/read/write, ioctl, and `_exit`. |
+| `main.rs` | Process-level composition and exit-code decisions. |
+
+## Data Flow
+
+CLI arguments become `cli::Config`. `main.rs` combines `Config`, terminal metadata, and `terminal::TerminalType` into:
+
+- `render::Palette`
+- `render::RenderState`
+- `render::run(config, state, palette)`
+
+`render::run` repeatedly:
+
+1. Updates terminal size after resize signals when not in telnet mode.
+2. Clears and prefixes a reusable `FrameBuffer`.
+3. Calls `Renderer::render_frame`.
+4. Writes the buffer to stdout and flushes.
+5. Advances `RenderLoop` state or returns `RunOutcome`.
+
+Frame data remains private to `animation.rs`. Rendering obtains symbols through `frame_symbol(frame, row, col)`, which returns `FrameSymbol`. Palette lookup remains an O(1) array index via `FrameSymbol::as_byte()`.
+
+## Runtime And Signals
+
+Normal execution restores the terminal through `TerminalSession` drop. Signal paths cannot rely on normal unwinding, so they use raw async-signal-compatible output and `sys::exit`.
+
+The resize signal path only sets an atomic flag. The render loop consumes that flag and recalculates crop bounds in normal code.
+
+## Telnet Flow
+
+Telnet support is intentionally synchronous:
+
+- `TelnetParser` converts bytes into parser events.
+- `TelnetNegotiation` handles state transitions and output bytes.
+- `ByteSource` lets tests drive negotiation with scripted input.
+- `TimeoutReader` is the production stdin/poll source.
+
+Do not introduce async unless the deployment model changes. The current tool speaks telnet over stdin/stdout for socket activation, inetd, or similar supervisors.
+
+## Error Policy
+
+Use `io::Result` where the domain is already I/O-bound. Add an app-level error enum only if errors need shared semantics across runtime, telnet, rendering, and CLI boundaries.
+
+Current process policy:
+
+- CLI errors print a stable user-facing message and exit failure.
+- Broken pipe is treated as successful termination.
+- Other runtime I/O errors print after terminal restore and currently exit success to preserve historical behavior.
+
+## Performance Policy
+
+The render path may use typed wrappers when they compile down to simple value passing and array indexing. Avoid abstractions that add per-cell allocation, dynamic dispatch, or avoidable format work.
+
+Before making performance claims:
+
+1. Build with `cargo build --release`.
+2. Run `--benchmark --frames ...` with stdout redirected to `/dev/null`.
+3. Record environment and results in `BENCHMARKS.md`.
+
+## Test Policy
+
+The baseline for behavior changes is:
+
+- `cargo fmt --check`
+- `cargo test`
+- `cargo clippy --all-targets --all-features -- -D warnings`
+- `cargo build --release`
+- Smoke paths from `RELEASE_CHECKLIST.md`
+
+For render or terminal-output changes, compare smoke output byte counts and inspect whether changed bytes are intentional.
+
+## Extension Guidelines
+
+- Add CLI options through `OPTION_SPECS` first, then implement behavior.
+- Keep raw frame strings inside `animation.rs`.
+- Keep unsafe code inside `sys.rs`.
+- Keep terminal cleanup behavior centralized in `runtime.rs`.
+- Keep telnet parser/state logic independently testable.
+- Update `ARCHITECTURE.md` when a module takes on a new responsibility.

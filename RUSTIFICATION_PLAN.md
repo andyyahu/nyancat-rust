@@ -1,6 +1,16 @@
 # Rustification Plan
 
-這份文件用來追蹤 `refactor/rustify-core` 的後續方向：目標不是把程式「寫得像 Rust」而已，而是在不犧牲效能與相容性的前提下，逐步擺脫披著 Rust 外皮的 C-style 結構。
+這份文件記錄 `refactor/rustify-core` 的 rustification 階段成果：目標不是把程式「寫得像 Rust」而已，而是在不犧牲效能與相容性的前提下，逐步擺脫披著 Rust 外皮的 C-style 結構。
+
+## 階段狀態
+
+本階段已完成。後續維護重心轉向正式發行品質：
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md)：記錄目前模組邊界、資料流、runtime policy 與擴充準則。
+- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)：記錄 release candidate / merge 前的驗證基準。
+- [`BENCHMARKS.md`](BENCHMARKS.md)：記錄可重跑的本機 benchmark snapshot。
+
+剩下的 app-level error enum 屬於條件式保留項，只有當錯誤面真的需要跨模組統一語意時才實作。
 
 ## 原則
 
@@ -35,7 +45,7 @@
 - CLI Option Spec 資料化：用 `OPTION_SPECS` 集中短選項、長選項與 arity，parser 不再分散維護 `match name` / `long_to_short` / `option_requires_value`。
 - FrameSymbol / animation 語意型別：frame raw strings 收在 `animation.rs` 內部，renderer 透過 `FrameSymbol` / `frame_symbol()` 取得語意化 symbol，palette lookup 仍是 O(1) array index。
 
-## 未實做方向
+## 保留方向
 
 ### 1. 錯誤語意整理
 
@@ -57,9 +67,11 @@ enum AppError {
 - 不為了形式化而包一層錯誤型別。
 - CLI error message 和 exit code 維持相容。
 
-## 建議順序
+## 後續判斷
 
-1. app-level error enum，只有當 runtime / telnet / CLI 錯誤面真的需要統一語意時再做
+- app-level error enum，只有當 runtime / telnet / CLI 錯誤面真的需要統一語意時再做。
+- 新功能若改變模組責任，先更新 `ARCHITECTURE.md`。
+- 發行前以 `RELEASE_CHECKLIST.md` 為準。
 
 ## Review Checklist
 
