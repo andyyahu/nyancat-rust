@@ -245,6 +245,74 @@ pub(crate) enum RunOutcome {
     FrameLimitReached { clear_screen: bool },
 }
 
+struct FrameBuffer {
+    bytes: Vec<u8>,
+}
+
+impl FrameBuffer {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            bytes: Vec::with_capacity(capacity),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.bytes.clear();
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    #[cfg(test)]
+    fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+
+    fn push_byte(&mut self, byte: u8) {
+        self.bytes.push(byte);
+    }
+
+    fn push_bytes(&mut self, bytes: &[u8]) {
+        self.bytes.extend_from_slice(bytes);
+    }
+
+    fn push_newlines(&mut self, telnet: bool, count: usize) {
+        for _ in 0..count {
+            if telnet {
+                self.push_bytes(b"\r\0\n");
+            } else {
+                self.push_byte(b'\n');
+            }
+        }
+    }
+
+    fn push_frame_prefix(&mut self, clear_screen: bool) {
+        if clear_screen {
+            self.push_bytes(b"\x1b[H");
+        } else {
+            self.push_bytes(b"\x1b[u");
+        }
+    }
+
+    fn push_spaces(&mut self, count: i32) {
+        for _ in 0..count.max(0) {
+            self.push_byte(b' ');
+        }
+    }
+}
+
+impl Write for FrameBuffer {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.push_bytes(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 pub(crate) fn run(
     config: Config,
     mut state: RenderState,
@@ -271,7 +339,7 @@ pub(crate) fn run(
     let start = Instant::now();
     let mut frame_index = 0usize;
     let mut frames_rendered = 0u32;
-    let mut buffer = Vec::with_capacity(32 * 1024);
+    let mut buffer = FrameBuffer::with_capacity(32 * 1024);
 
     loop {
         let frame_start = Instant::now();
@@ -281,11 +349,7 @@ pub(crate) fn run(
         }
 
         buffer.clear();
-        if config.clear_screen {
-            buffer.extend_from_slice(b"\x1b[H");
-        } else {
-            buffer.extend_from_slice(b"\x1b[u");
-        }
+        buffer.push_frame_prefix(config.clear_screen);
 
         render_frame(
             &mut buffer,
@@ -295,7 +359,7 @@ pub(crate) fn run(
             frame_index,
             start.elapsed().as_secs(),
         );
-        stdout.write_all(&buffer)?;
+        stdout.write_all(buffer.as_bytes())?;
         stdout.flush()?;
 
         frames_rendered = frames_rendered.saturating_add(1);
@@ -319,7 +383,7 @@ pub(crate) fn run(
 }
 
 fn render_frame(
-    out: &mut Vec<u8>,
+    out: &mut FrameBuffer,
     config: &Config,
     state: &RenderState,
     palette: &Palette,
@@ -353,27 +417,25 @@ fn render_frame(
                     let escape = palette.color(color);
                     if color != last && !escape.is_empty() {
                         last = color;
-                        out.extend_from_slice(escape);
+                        out.push_bytes(escape);
                     }
-                    out.extend_from_slice(output);
+                    out.push_bytes(output);
                 }
                 None => {
                     // ASCII mode: palette entries already contain the visual representation.
-                    out.extend_from_slice(palette.color(color));
+                    out.push_bytes(palette.color(color));
                 }
             }
         }
-        push_newline(out, config.telnet, 1);
+        out.push_newlines(config.telnet, 1);
     }
 
     if config.show_counter {
         let width = (state.terminal_size.width - 29 - elapsed_seconds.to_string().len() as i32) / 2;
-        for _ in 0..width.max(0) {
-            out.push(b' ');
-        }
-        out.extend_from_slice(b"\x1b[1;37m");
+        out.push_spaces(width);
+        out.push_bytes(b"\x1b[1;37m");
         let _ = write!(out, "You have nyaned for {elapsed_seconds} seconds!");
-        out.extend_from_slice(b"\x1b[J\x1b[0m");
+        out.push_bytes(b"\x1b[J\x1b[0m");
     }
 }
 
@@ -381,38 +443,37 @@ fn show_intro(out: &mut impl Write, telnet: bool, clear_screen: bool) -> io::Res
     let countdown_clock = 5;
 
     for k in 0..countdown_clock {
-        let mut buffer = Vec::with_capacity(1024);
-        push_newline(&mut buffer, telnet, 3);
-        buffer
-            .extend_from_slice(b"                             \x1b[1mNyancat Telnet Server\x1b[0m");
-        push_newline(&mut buffer, telnet, 2);
-        buffer.extend_from_slice(
+        let mut buffer = FrameBuffer::with_capacity(1024);
+        buffer.push_newlines(telnet, 3);
+        buffer.push_bytes(b"                             \x1b[1mNyancat Telnet Server\x1b[0m");
+        buffer.push_newlines(telnet, 2);
+        buffer.push_bytes(
             b"                   written and run by \x1b[1;32mK. Lange\x1b[1;34m @_klange\x1b[0m",
         );
-        push_newline(&mut buffer, telnet, 2);
-        buffer.extend_from_slice(b"        If things don't look right, try:");
-        push_newline(&mut buffer, telnet, 1);
-        buffer.extend_from_slice(b"                TERM=fallback telnet ...");
-        push_newline(&mut buffer, telnet, 2);
-        buffer.extend_from_slice(b"        Or on Windows:");
-        push_newline(&mut buffer, telnet, 1);
-        buffer.extend_from_slice(b"                telnet -t vtnt ...");
-        push_newline(&mut buffer, telnet, 2);
-        buffer.extend_from_slice(b"        Problems? Check the website:");
-        push_newline(&mut buffer, telnet, 1);
-        buffer.extend_from_slice(b"                \x1b[1;34mhttp://nyancat.dakko.us\x1b[0m");
-        push_newline(&mut buffer, telnet, 2);
-        buffer.extend_from_slice(b"        This is a telnet server, remember your escape keys!");
-        push_newline(&mut buffer, telnet, 1);
-        buffer.extend_from_slice(b"                \x1b[1;31m^]quit\x1b[0m to exit");
-        push_newline(&mut buffer, telnet, 2);
+        buffer.push_newlines(telnet, 2);
+        buffer.push_bytes(b"        If things don't look right, try:");
+        buffer.push_newlines(telnet, 1);
+        buffer.push_bytes(b"                TERM=fallback telnet ...");
+        buffer.push_newlines(telnet, 2);
+        buffer.push_bytes(b"        Or on Windows:");
+        buffer.push_newlines(telnet, 1);
+        buffer.push_bytes(b"                telnet -t vtnt ...");
+        buffer.push_newlines(telnet, 2);
+        buffer.push_bytes(b"        Problems? Check the website:");
+        buffer.push_newlines(telnet, 1);
+        buffer.push_bytes(b"                \x1b[1;34mhttp://nyancat.dakko.us\x1b[0m");
+        buffer.push_newlines(telnet, 2);
+        buffer.push_bytes(b"        This is a telnet server, remember your escape keys!");
+        buffer.push_newlines(telnet, 1);
+        buffer.push_bytes(b"                \x1b[1;31m^]quit\x1b[0m to exit");
+        buffer.push_newlines(telnet, 2);
         let _ = writeln!(
             buffer,
             "        Starting in {}...                ",
             countdown_clock - k
         );
 
-        out.write_all(&buffer)?;
+        out.write_all(buffer.as_bytes())?;
         out.flush()?;
         thread::sleep(Duration::from_millis(400));
         if clear_screen {
@@ -429,16 +490,6 @@ fn show_intro(out: &mut impl Write, telnet: bool, clear_screen: bool) -> io::Res
     Ok(())
 }
 
-fn push_newline(out: &mut Vec<u8>, telnet: bool, count: usize) {
-    for _ in 0..count {
-        if telnet {
-            out.extend_from_slice(b"\r\0\n");
-        } else {
-            out.push(b'\n');
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -447,11 +498,41 @@ mod tests {
         let mut state = RenderState::new(config, TerminalSize::new(80, 24));
         state.finalize_auto_crop();
         let palette = Palette::new(TerminalType::Vt100Ascii);
-        let mut out = Vec::new();
+        let mut out = FrameBuffer::with_capacity(32 * 1024);
 
         render_frame(&mut out, config, &state, &palette, 0, elapsed_seconds);
 
-        out
+        out.into_bytes()
+    }
+
+    #[test]
+    fn frame_buffer_uses_terminal_newlines() {
+        let mut buffer = FrameBuffer::with_capacity(16);
+
+        buffer.push_newlines(false, 2);
+
+        assert_eq!(buffer.as_bytes(), b"\n\n");
+    }
+
+    #[test]
+    fn frame_buffer_uses_telnet_newlines() {
+        let mut buffer = FrameBuffer::with_capacity(16);
+
+        buffer.push_newlines(true, 2);
+
+        assert_eq!(buffer.as_bytes(), b"\r\0\n\r\0\n");
+    }
+
+    #[test]
+    fn frame_buffer_prefix_tracks_clear_screen_mode() {
+        let mut buffer = FrameBuffer::with_capacity(8);
+
+        buffer.push_frame_prefix(true);
+        assert_eq!(buffer.as_bytes(), b"\x1b[H");
+
+        buffer.clear();
+        buffer.push_frame_prefix(false);
+        assert_eq!(buffer.as_bytes(), b"\x1b[u");
     }
 
     #[test]
