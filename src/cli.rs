@@ -131,6 +131,96 @@ impl Default for Config {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OptionId {
+    NoClear,
+    NoTitle,
+    Intro,
+    SkipIntro,
+    Telnet,
+    Benchmark,
+    TrueColor,
+    Help,
+    NoCounter,
+    Delay,
+    Frames,
+    MinRows,
+    MaxRows,
+    MinCols,
+    MaxCols,
+    Width,
+    Height,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OptionArity {
+    Flag,
+    Value,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct OptionSpec {
+    id: OptionId,
+    short: char,
+    long: &'static str,
+    arity: OptionArity,
+}
+
+impl OptionSpec {
+    const fn flag(id: OptionId, short: char, long: &'static str) -> Self {
+        Self {
+            id,
+            short,
+            long,
+            arity: OptionArity::Flag,
+        }
+    }
+
+    const fn value(id: OptionId, short: char, long: &'static str) -> Self {
+        Self {
+            id,
+            short,
+            long,
+            arity: OptionArity::Value,
+        }
+    }
+
+    const fn takes_value(self) -> bool {
+        matches!(self.arity, OptionArity::Value)
+    }
+}
+
+const OPTION_SPECS: &[OptionSpec] = &[
+    OptionSpec::flag(OptionId::Intro, 'i', "intro"),
+    OptionSpec::flag(OptionId::SkipIntro, 'I', "skip-intro"),
+    OptionSpec::flag(OptionId::Telnet, 't', "telnet"),
+    OptionSpec::flag(OptionId::TrueColor, 'T', "truecolor"),
+    OptionSpec::flag(OptionId::NoCounter, 'n', "no-counter"),
+    OptionSpec::flag(OptionId::NoTitle, 's', "no-title"),
+    OptionSpec::flag(OptionId::NoClear, 'e', "no-clear"),
+    OptionSpec::flag(OptionId::Benchmark, 'b', "benchmark"),
+    OptionSpec::flag(OptionId::Help, 'h', "help"),
+    OptionSpec::value(OptionId::Delay, 'd', "delay"),
+    OptionSpec::value(OptionId::Frames, 'f', "frames"),
+    OptionSpec::value(OptionId::MinRows, 'r', "min-rows"),
+    OptionSpec::value(OptionId::MaxRows, 'R', "max-rows"),
+    OptionSpec::value(OptionId::MinCols, 'c', "min-cols"),
+    OptionSpec::value(OptionId::MaxCols, 'C', "max-cols"),
+    OptionSpec::value(OptionId::Width, 'W', "width"),
+    OptionSpec::value(OptionId::Height, 'H', "height"),
+];
+
+fn option_by_long(long: &str) -> Option<OptionSpec> {
+    OPTION_SPECS.iter().copied().find(|spec| spec.long == long)
+}
+
+fn option_by_short(short: char) -> Option<OptionSpec> {
+    OPTION_SPECS
+        .iter()
+        .copied()
+        .find(|spec| spec.short == short)
+}
+
 pub(crate) fn parse_args(args: &[String]) -> Result<CliAction, CliError> {
     let program = args
         .first()
@@ -148,39 +238,28 @@ pub(crate) fn parse_args(args: &[String]) -> Result<CliAction, CliError> {
             let (name, value) = long.split_once('=').map_or((long, None), |(name, value)| {
                 (name, Some(value.to_string()))
             });
-            match name {
-                "help" => {
-                    return Ok(CliAction::Help {
-                        program: program.clone(),
-                    });
-                }
-                "telnet" => config.telnet = true,
-                "intro" => config.show_intro = true,
-                "skip-intro" => config.skip_intro = true,
-                "no-counter" => config.show_counter = false,
-                "no-title" => config.set_title = false,
-                "no-clear" => config.clear_screen = false,
-                "benchmark" => config.benchmark = true,
-                "truecolor" => config.truecolor = true,
-                "delay" | "frames" | "min-rows" | "max-rows" | "min-cols" | "max-cols"
-                | "width" | "height" => {
-                    let option = format!("--{name}");
-                    let value = match value {
-                        Some(value) => value,
-                        None => {
-                            i += 1;
-                            args.get(i).cloned().ok_or_else(|| CliError::MissingValue {
-                                option: option.clone(),
-                            })?
-                        }
-                    };
-                    apply_option(&mut config, long_to_short(name), &option, &value)?;
-                }
-                _ => {
-                    return Err(CliError::UnknownOption {
-                        option: format!("--{name}"),
-                    });
-                }
+            let Some(spec) = option_by_long(name) else {
+                return Err(CliError::UnknownOption {
+                    option: format!("--{name}"),
+                });
+            };
+
+            if spec.takes_value() {
+                let option = format!("--{name}");
+                let value = match value {
+                    Some(value) => value,
+                    None => {
+                        i += 1;
+                        args.get(i).cloned().ok_or_else(|| CliError::MissingValue {
+                            option: option.clone(),
+                        })?
+                    }
+                };
+                apply_value_option(&mut config, spec, &option, &value)?;
+            } else if let Some(action) =
+                apply_flag(&mut config, spec, &format!("--{name}"), &program)?
+            {
+                return Ok(action);
             }
         } else if arg.starts_with('-') && arg.len() > 1 {
             let bytes = arg.as_bytes();
@@ -188,7 +267,14 @@ pub(crate) fn parse_args(args: &[String]) -> Result<CliAction, CliError> {
             while pos < bytes.len() {
                 let opt = bytes[pos] as char;
                 pos += 1;
-                if option_requires_value(opt) {
+
+                let Some(spec) = option_by_short(opt) else {
+                    return Err(CliError::UnknownOption {
+                        option: format!("-{opt}"),
+                    });
+                };
+
+                if spec.takes_value() {
                     let option = format!("-{opt}");
                     let value = if pos < bytes.len() {
                         String::from_utf8_lossy(&bytes[pos..]).into_owned()
@@ -198,10 +284,10 @@ pub(crate) fn parse_args(args: &[String]) -> Result<CliAction, CliError> {
                             option: option.clone(),
                         })?
                     };
-                    apply_option(&mut config, opt, &option, &value)?;
+                    apply_value_option(&mut config, spec, &option, &value)?;
                     break;
                 }
-                if let Some(action) = apply_flag(&mut config, opt, &program)? {
+                if let Some(action) = apply_flag(&mut config, spec, &format!("-{opt}"), &program)? {
                     return Ok(action);
                 }
             }
@@ -215,26 +301,27 @@ pub(crate) fn parse_args(args: &[String]) -> Result<CliAction, CliError> {
 
 fn apply_flag(
     config: &mut Config,
-    opt: char,
+    spec: OptionSpec,
+    option: &str,
     program: &str,
 ) -> Result<Option<CliAction>, CliError> {
-    match opt {
-        'e' => config.clear_screen = false,
-        's' => config.set_title = false,
-        'i' => config.show_intro = true,
-        'I' => config.skip_intro = true,
-        't' => config.telnet = true,
-        'b' => config.benchmark = true,
-        'T' => config.truecolor = true,
-        'h' => {
+    match spec.id {
+        OptionId::NoClear => config.clear_screen = false,
+        OptionId::NoTitle => config.set_title = false,
+        OptionId::Intro => config.show_intro = true,
+        OptionId::SkipIntro => config.skip_intro = true,
+        OptionId::Telnet => config.telnet = true,
+        OptionId::Benchmark => config.benchmark = true,
+        OptionId::TrueColor => config.truecolor = true,
+        OptionId::Help => {
             return Ok(Some(CliAction::Help {
                 program: program.to_string(),
             }));
         }
-        'n' => config.show_counter = false,
+        OptionId::NoCounter => config.show_counter = false,
         _ => {
             return Err(CliError::UnknownOption {
-                option: format!("-{opt}"),
+                option: option.to_string(),
             });
         }
     }
@@ -242,14 +329,19 @@ fn apply_flag(
     Ok(None)
 }
 
-fn apply_option(config: &mut Config, opt: char, option: &str, value: &str) -> Result<(), CliError> {
+fn apply_value_option(
+    config: &mut Config,
+    spec: OptionSpec,
+    option: &str,
+    value: &str,
+) -> Result<(), CliError> {
     let parsed = value.parse::<i32>().map_err(|_| CliError::InvalidValue {
         option: option.to_string(),
         value: value.to_string(),
     })?;
 
-    match opt {
-        'd' => {
+    match spec.id {
+        OptionId::Delay => {
             if !(10..=1000).contains(&parsed) {
                 return Err(CliError::ValueOutOfRange {
                     option: option.to_string(),
@@ -260,13 +352,13 @@ fn apply_option(config: &mut Config, opt: char, option: &str, value: &str) -> Re
             }
             config.delay_ms = parsed as u64;
         }
-        'f' => config.frame_count = parsed.max(0) as u32,
-        'r' => config.crop.rows.set_min(parsed),
-        'R' => config.crop.rows.set_max(parsed),
-        'c' => config.crop.cols.set_min(parsed),
-        'C' => config.crop.cols.set_max(parsed),
-        'W' => config.crop.cols = AxisCrop::centered(FRAME_WIDTH as i32, parsed),
-        'H' => config.crop.rows = AxisCrop::centered(FRAME_HEIGHT as i32, parsed),
+        OptionId::Frames => config.frame_count = parsed.max(0) as u32,
+        OptionId::MinRows => config.crop.rows.set_min(parsed),
+        OptionId::MaxRows => config.crop.rows.set_max(parsed),
+        OptionId::MinCols => config.crop.cols.set_min(parsed),
+        OptionId::MaxCols => config.crop.cols.set_max(parsed),
+        OptionId::Width => config.crop.cols = AxisCrop::centered(FRAME_WIDTH as i32, parsed),
+        OptionId::Height => config.crop.rows = AxisCrop::centered(FRAME_HEIGHT as i32, parsed),
         _ => {
             return Err(CliError::UnknownOption {
                 option: option.to_string(),
@@ -275,24 +367,6 @@ fn apply_option(config: &mut Config, opt: char, option: &str, value: &str) -> Re
     }
 
     Ok(())
-}
-
-fn long_to_short(name: &str) -> char {
-    match name {
-        "delay" => 'd',
-        "frames" => 'f',
-        "min-rows" => 'r',
-        "max-rows" => 'R',
-        "min-cols" => 'c',
-        "max-cols" => 'C',
-        "width" => 'W',
-        "height" => 'H',
-        _ => '\0',
-    }
-}
-
-fn option_requires_value(opt: char) -> bool {
-    matches!(opt, 'd' | 'f' | 'r' | 'R' | 'c' | 'C' | 'W' | 'H')
 }
 
 pub(crate) fn print_usage(program: &str) {
@@ -325,13 +399,29 @@ pub(crate) fn print_usage(program: &str) {
 mod tests {
     use super::*;
 
+    fn value_spec(short: char) -> OptionSpec {
+        option_by_short(short).unwrap()
+    }
+
     #[test]
     fn width_and_height_options_center_crop() {
         let mut config = Config::default();
-        apply_option(&mut config, 'W', "-W", "40").unwrap();
-        apply_option(&mut config, 'H', "-H", "24").unwrap();
+        apply_value_option(&mut config, value_spec('W'), "-W", "40").unwrap();
+        apply_value_option(&mut config, value_spec('H'), "-H", "24").unwrap();
         assert_eq!(config.crop.cols.as_pair(), (12, 52));
         assert_eq!(config.crop.rows.as_pair(), (20, 44));
+    }
+
+    #[test]
+    fn option_specs_resolve_long_and_short_forms() {
+        let frames = option_by_long("frames").unwrap();
+
+        assert_eq!(frames.short, 'f');
+        assert_eq!(option_by_short('f'), Some(frames));
+        assert!(frames.takes_value());
+        assert!(!option_by_long("telnet").unwrap().takes_value());
+        assert_eq!(option_by_long("wat"), None);
+        assert_eq!(option_by_short('?'), None);
     }
 
     #[test]
@@ -388,9 +478,10 @@ mod tests {
     #[test]
     fn invalid_delay_is_reported() {
         let mut config = Config::default();
+        let delay = value_spec('d');
 
         assert_eq!(
-            apply_option(&mut config, 'd', "-d", "9"),
+            apply_value_option(&mut config, delay, "-d", "9"),
             Err(CliError::ValueOutOfRange {
                 option: "-d".to_string(),
                 value: 9,
@@ -399,7 +490,7 @@ mod tests {
             })
         );
         assert_eq!(
-            apply_option(&mut config, 'd', "-d", "not-a-number"),
+            apply_value_option(&mut config, delay, "-d", "not-a-number"),
             Err(CliError::InvalidValue {
                 option: "-d".to_string(),
                 value: "not-a-number".to_string(),

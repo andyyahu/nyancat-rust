@@ -31,6 +31,8 @@
 - Telnet I/O 抽象：negotiation loop 透過 `ByteSource` 讀 byte，stdin/poll 保留在 production path，測試可用 scripted input 驗完整 response。
 - Sys Layer 型別安全：用 `Signal` / `PollTimeout` 擋住外層裸整數，stdin/stdout fd 收成 `sys.rs` 內部 private newtype。
 - Performance benchmark harness：`--benchmark --frames ...` 結束時輸出 key=value 統計，包含 frame count、elapsed、FPS、總 bytes、平均/max frame bytes 與 MiB/s。
+- Benchmark snapshot 文件：`BENCHMARKS.md` 記錄可重跑的本機性能樣本，README 保留方法與連結，不硬寫不可追溯的性能宣稱。
+- CLI Option Spec 資料化：用 `OPTION_SPECS` 集中短選項、長選項與 arity，parser 不再分散維護 `match name` / `long_to_short` / `option_requires_value`。
 
 ## 未實做方向
 
@@ -69,19 +71,9 @@ enum AppError {
 - 不為了形式化而包一層錯誤型別。
 - CLI error message 和 exit code 維持相容。
 
-### 3. CLI Option Spec 資料化
-
-CLI parsing 已經結構化，但 option dispatch 還是 match + char。可以資料化 option spec，不過目前優先級低，因為現有 match 可讀性仍高。
-
-完成標準：
-
-- 如果新增更多 option，再考慮資料表化。
-- 不降低目前 error message 的精準度。
-- 不引入外部 CLI crate，除非專案目標改變。
-
 ## 建議順序
 
-1. app-level error enum / CLI option spec，視後續複雜度決定
+1. app-level error enum，只有當 runtime / telnet / CLI 錯誤面真的需要統一語意時再做
 2. FrameSymbol / animation newtype，只有在能明確降低 frame data 風險時再做
 
 ## Review Checklist
