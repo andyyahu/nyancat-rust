@@ -313,6 +313,125 @@ impl Write for FrameBuffer {
     }
 }
 
+struct Renderer<'a> {
+    config: &'a Config,
+    palette: &'a Palette,
+}
+
+impl<'a> Renderer<'a> {
+    fn new(config: &'a Config, palette: &'a Palette) -> Self {
+        Self { config, palette }
+    }
+
+    fn render_frame(
+        &self,
+        out: &mut FrameBuffer,
+        state: &RenderState,
+        frame_index: usize,
+        elapsed_seconds: u64,
+    ) {
+        let mut last = 0u8;
+        let frame = FRAMES[frame_index];
+        const RAINBOW: &[u8] = b",,>>&&&+++###==;;;,,";
+
+        for y in state.min_row..state.max_row {
+            for x in state.min_col..state.max_col {
+                let color = if y > 23 && y < 43 && x < 0 {
+                    // Generate rainbow tail for negative x coordinates (off-screen left)
+                    let mut mod_x = ((-x + 2) % 16) / 8;
+                    if (frame_index / 2) % 2 == 1 {
+                        mod_x = 1 - mod_x;
+                    }
+                    let index = (mod_x + y - 23) as usize;
+                    RAINBOW.get(index).copied().unwrap_or(b',')
+                } else if !(0..FRAME_HEIGHT as i32).contains(&y)
+                    || !(0..FRAME_WIDTH as i32).contains(&x)
+                {
+                    b','
+                } else {
+                    frame[y as usize].as_bytes()[x as usize]
+                };
+
+                match self.palette.output {
+                    Some(output) => {
+                        let escape = self.palette.color(color);
+                        if color != last && !escape.is_empty() {
+                            last = color;
+                            out.push_bytes(escape);
+                        }
+                        out.push_bytes(output);
+                    }
+                    None => {
+                        // ASCII mode: palette entries already contain the visual representation.
+                        out.push_bytes(self.palette.color(color));
+                    }
+                }
+            }
+            out.push_newlines(self.config.telnet, 1);
+        }
+
+        if self.config.show_counter {
+            let width =
+                (state.terminal_size.width - 29 - elapsed_seconds.to_string().len() as i32) / 2;
+            out.push_spaces(width);
+            out.push_bytes(b"\x1b[1;37m");
+            let _ = write!(out, "You have nyaned for {elapsed_seconds} seconds!");
+            out.push_bytes(b"\x1b[J\x1b[0m");
+        }
+    }
+}
+
+struct RenderLoop {
+    start: Instant,
+    target_delay: Duration,
+    frame_index: usize,
+    frames_rendered: u32,
+}
+
+impl RenderLoop {
+    fn new(delay_ms: u64) -> Self {
+        Self {
+            start: Instant::now(),
+            target_delay: Duration::from_millis(delay_ms),
+            frame_index: 0,
+            frames_rendered: 0,
+        }
+    }
+
+    fn frame_index(&self) -> usize {
+        self.frame_index
+    }
+
+    fn elapsed_seconds(&self) -> u64 {
+        self.start.elapsed().as_secs()
+    }
+
+    fn finish_frame(&mut self, frame_start: Instant, frame_count: u32) -> bool {
+        self.frames_rendered = self.frames_rendered.saturating_add(1);
+        if frame_count != 0 && self.frames_rendered == frame_count {
+            return true;
+        }
+
+        self.advance_frame();
+        self.sleep_remaining_frame_time(frame_start);
+        false
+    }
+
+    fn advance_frame(&mut self) {
+        self.frame_index += 1;
+        if self.frame_index == FRAMES.len() {
+            self.frame_index = 0;
+        }
+    }
+
+    fn sleep_remaining_frame_time(&self, frame_start: Instant) {
+        let elapsed = frame_start.elapsed();
+        if let Some(sleep_time) = self.target_delay.checked_sub(elapsed) {
+            thread::sleep(sleep_time);
+        }
+    }
+}
+
 pub(crate) fn run(
     config: Config,
     mut state: RenderState,
@@ -336,9 +455,8 @@ pub(crate) fn run(
         show_intro(&mut stdout, config.telnet, config.clear_screen)?;
     }
 
-    let start = Instant::now();
-    let mut frame_index = 0usize;
-    let mut frames_rendered = 0u32;
+    let renderer = Renderer::new(&config, &palette);
+    let mut render_loop = RenderLoop::new(config.delay_ms);
     let mut buffer = FrameBuffer::with_capacity(32 * 1024);
 
     loop {
@@ -351,91 +469,20 @@ pub(crate) fn run(
         buffer.clear();
         buffer.push_frame_prefix(config.clear_screen);
 
-        render_frame(
+        renderer.render_frame(
             &mut buffer,
-            &config,
             &state,
-            &palette,
-            frame_index,
-            start.elapsed().as_secs(),
+            render_loop.frame_index(),
+            render_loop.elapsed_seconds(),
         );
         stdout.write_all(buffer.as_bytes())?;
         stdout.flush()?;
 
-        frames_rendered = frames_rendered.saturating_add(1);
-        if config.frame_count != 0 && frames_rendered == config.frame_count {
+        if render_loop.finish_frame(frame_start, config.frame_count) {
             return Ok(RunOutcome::FrameLimitReached {
                 clear_screen: config.clear_screen,
             });
         }
-
-        frame_index += 1;
-        if frame_index == FRAMES.len() {
-            frame_index = 0;
-        }
-
-        let elapsed = frame_start.elapsed();
-        let target_delay = Duration::from_millis(config.delay_ms);
-        if let Some(sleep_time) = target_delay.checked_sub(elapsed) {
-            thread::sleep(sleep_time);
-        }
-    }
-}
-
-fn render_frame(
-    out: &mut FrameBuffer,
-    config: &Config,
-    state: &RenderState,
-    palette: &Palette,
-    frame_index: usize,
-    elapsed_seconds: u64,
-) {
-    let mut last = 0u8;
-    let frame = FRAMES[frame_index];
-    const RAINBOW: &[u8] = b",,>>&&&+++###==;;;,,";
-
-    for y in state.min_row..state.max_row {
-        for x in state.min_col..state.max_col {
-            let color = if y > 23 && y < 43 && x < 0 {
-                // Generate rainbow tail for negative x coordinates (off-screen left)
-                let mut mod_x = ((-x + 2) % 16) / 8;
-                if (frame_index / 2) % 2 == 1 {
-                    mod_x = 1 - mod_x;
-                }
-                let index = (mod_x + y - 23) as usize;
-                RAINBOW.get(index).copied().unwrap_or(b',')
-            } else if !(0..FRAME_HEIGHT as i32).contains(&y)
-                || !(0..FRAME_WIDTH as i32).contains(&x)
-            {
-                b','
-            } else {
-                frame[y as usize].as_bytes()[x as usize]
-            };
-
-            match palette.output {
-                Some(output) => {
-                    let escape = palette.color(color);
-                    if color != last && !escape.is_empty() {
-                        last = color;
-                        out.push_bytes(escape);
-                    }
-                    out.push_bytes(output);
-                }
-                None => {
-                    // ASCII mode: palette entries already contain the visual representation.
-                    out.push_bytes(palette.color(color));
-                }
-            }
-        }
-        out.push_newlines(config.telnet, 1);
-    }
-
-    if config.show_counter {
-        let width = (state.terminal_size.width - 29 - elapsed_seconds.to_string().len() as i32) / 2;
-        out.push_spaces(width);
-        out.push_bytes(b"\x1b[1;37m");
-        let _ = write!(out, "You have nyaned for {elapsed_seconds} seconds!");
-        out.push_bytes(b"\x1b[J\x1b[0m");
     }
 }
 
@@ -498,9 +545,10 @@ mod tests {
         let mut state = RenderState::new(config, TerminalSize::new(80, 24));
         state.finalize_auto_crop();
         let palette = Palette::new(TerminalType::Vt100Ascii);
+        let renderer = Renderer::new(config, &palette);
         let mut out = FrameBuffer::with_capacity(32 * 1024);
 
-        render_frame(&mut out, config, &state, &palette, 0, elapsed_seconds);
+        renderer.render_frame(&mut out, &state, 0, elapsed_seconds);
 
         out.into_bytes()
     }
@@ -533,6 +581,34 @@ mod tests {
         buffer.clear();
         buffer.push_frame_prefix(false);
         assert_eq!(buffer.as_bytes(), b"\x1b[u");
+    }
+
+    #[test]
+    fn render_loop_advances_frame_indices() {
+        let mut render_loop = RenderLoop::new(0);
+
+        assert_eq!(render_loop.frame_index(), 0);
+        assert!(!render_loop.finish_frame(Instant::now(), 0));
+        assert_eq!(render_loop.frame_index(), 1);
+    }
+
+    #[test]
+    fn render_loop_wraps_frame_indices() {
+        let mut render_loop = RenderLoop::new(0);
+
+        for _ in 0..FRAMES.len() {
+            assert!(!render_loop.finish_frame(Instant::now(), 0));
+        }
+
+        assert_eq!(render_loop.frame_index(), 0);
+    }
+
+    #[test]
+    fn render_loop_reports_frame_limit_before_advancing() {
+        let mut render_loop = RenderLoop::new(0);
+
+        assert!(render_loop.finish_frame(Instant::now(), 1));
+        assert_eq!(render_loop.frame_index(), 0);
     }
 
     #[test]
