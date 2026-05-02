@@ -1,4 +1,4 @@
-use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES};
+use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FrameSymbol, frame_count, frame_symbol};
 use crate::cli::Config;
 use crate::runtime::take_resize_pending;
 use crate::terminal::{TerminalSize, TerminalType, terminal_size};
@@ -75,133 +75,133 @@ pub(crate) struct Palette {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct PaletteEntry {
-    symbol: u8,
+    symbol: FrameSymbol,
     value: &'static [u8],
 }
 
 impl PaletteEntry {
-    const fn new(symbol: u8, value: &'static [u8]) -> Self {
+    const fn new(symbol: FrameSymbol, value: &'static [u8]) -> Self {
         Self { symbol, value }
     }
 }
 
 const XTERM_256_PALETTE: &[PaletteEntry] = &[
-    PaletteEntry::new(b',', b"\x1b[48;5;17m"),
-    PaletteEntry::new(b'.', b"\x1b[48;5;231m"),
-    PaletteEntry::new(b'\'', b"\x1b[48;5;16m"),
-    PaletteEntry::new(b'@', b"\x1b[48;5;230m"),
-    PaletteEntry::new(b'$', b"\x1b[48;5;175m"),
-    PaletteEntry::new(b'-', b"\x1b[48;5;162m"),
-    PaletteEntry::new(b'>', b"\x1b[48;5;196m"),
-    PaletteEntry::new(b'&', b"\x1b[48;5;214m"),
-    PaletteEntry::new(b'+', b"\x1b[48;5;226m"),
-    PaletteEntry::new(b'#', b"\x1b[48;5;118m"),
-    PaletteEntry::new(b'=', b"\x1b[48;5;33m"),
-    PaletteEntry::new(b';', b"\x1b[48;5;19m"),
-    PaletteEntry::new(b'*', b"\x1b[48;5;240m"),
-    PaletteEntry::new(b'%', b"\x1b[48;5;175m"),
+    PaletteEntry::new(FrameSymbol::BACKGROUND, b"\x1b[48;5;17m"),
+    PaletteEntry::new(FrameSymbol::STAR, b"\x1b[48;5;231m"),
+    PaletteEntry::new(FrameSymbol::BLACK, b"\x1b[48;5;16m"),
+    PaletteEntry::new(FrameSymbol::BODY_EDGE, b"\x1b[48;5;230m"),
+    PaletteEntry::new(FrameSymbol::BODY, b"\x1b[48;5;175m"),
+    PaletteEntry::new(FrameSymbol::BODY_MARK, b"\x1b[48;5;162m"),
+    PaletteEntry::new(FrameSymbol::RED, b"\x1b[48;5;196m"),
+    PaletteEntry::new(FrameSymbol::ORANGE, b"\x1b[48;5;214m"),
+    PaletteEntry::new(FrameSymbol::YELLOW, b"\x1b[48;5;226m"),
+    PaletteEntry::new(FrameSymbol::GREEN, b"\x1b[48;5;118m"),
+    PaletteEntry::new(FrameSymbol::BLUE, b"\x1b[48;5;33m"),
+    PaletteEntry::new(FrameSymbol::INDIGO, b"\x1b[48;5;19m"),
+    PaletteEntry::new(FrameSymbol::FACE, b"\x1b[48;5;240m"),
+    PaletteEntry::new(FrameSymbol::BLUSH, b"\x1b[48;5;175m"),
 ];
 
 const ANSI_16_PALETTE: &[PaletteEntry] = &[
-    PaletteEntry::new(b',', b"\x1b[104m"),
-    PaletteEntry::new(b'.', b"\x1b[107m"),
-    PaletteEntry::new(b'\'', b"\x1b[40m"),
-    PaletteEntry::new(b'@', b"\x1b[47m"),
-    PaletteEntry::new(b'$', b"\x1b[105m"),
-    PaletteEntry::new(b'-', b"\x1b[101m"),
-    PaletteEntry::new(b'>', b"\x1b[101m"),
-    PaletteEntry::new(b'&', b"\x1b[43m"),
-    PaletteEntry::new(b'+', b"\x1b[103m"),
-    PaletteEntry::new(b'#', b"\x1b[102m"),
-    PaletteEntry::new(b'=', b"\x1b[104m"),
-    PaletteEntry::new(b';', b"\x1b[44m"),
-    PaletteEntry::new(b'*', b"\x1b[100m"),
-    PaletteEntry::new(b'%', b"\x1b[105m"),
+    PaletteEntry::new(FrameSymbol::BACKGROUND, b"\x1b[104m"),
+    PaletteEntry::new(FrameSymbol::STAR, b"\x1b[107m"),
+    PaletteEntry::new(FrameSymbol::BLACK, b"\x1b[40m"),
+    PaletteEntry::new(FrameSymbol::BODY_EDGE, b"\x1b[47m"),
+    PaletteEntry::new(FrameSymbol::BODY, b"\x1b[105m"),
+    PaletteEntry::new(FrameSymbol::BODY_MARK, b"\x1b[101m"),
+    PaletteEntry::new(FrameSymbol::RED, b"\x1b[101m"),
+    PaletteEntry::new(FrameSymbol::ORANGE, b"\x1b[43m"),
+    PaletteEntry::new(FrameSymbol::YELLOW, b"\x1b[103m"),
+    PaletteEntry::new(FrameSymbol::GREEN, b"\x1b[102m"),
+    PaletteEntry::new(FrameSymbol::BLUE, b"\x1b[104m"),
+    PaletteEntry::new(FrameSymbol::INDIGO, b"\x1b[44m"),
+    PaletteEntry::new(FrameSymbol::FACE, b"\x1b[100m"),
+    PaletteEntry::new(FrameSymbol::BLUSH, b"\x1b[105m"),
 ];
 
 const LINUX_PALETTE: &[PaletteEntry] = &[
-    PaletteEntry::new(b',', b"\x1b[25;44m"),
-    PaletteEntry::new(b'.', b"\x1b[5;47m"),
-    PaletteEntry::new(b'\'', b"\x1b[25;40m"),
-    PaletteEntry::new(b'@', b"\x1b[5;47m"),
-    PaletteEntry::new(b'$', b"\x1b[5;45m"),
-    PaletteEntry::new(b'-', b"\x1b[5;41m"),
-    PaletteEntry::new(b'>', b"\x1b[5;41m"),
-    PaletteEntry::new(b'&', b"\x1b[25;43m"),
-    PaletteEntry::new(b'+', b"\x1b[5;43m"),
-    PaletteEntry::new(b'#', b"\x1b[5;42m"),
-    PaletteEntry::new(b'=', b"\x1b[25;44m"),
-    PaletteEntry::new(b';', b"\x1b[5;44m"),
-    PaletteEntry::new(b'*', b"\x1b[5;40m"),
-    PaletteEntry::new(b'%', b"\x1b[5;45m"),
+    PaletteEntry::new(FrameSymbol::BACKGROUND, b"\x1b[25;44m"),
+    PaletteEntry::new(FrameSymbol::STAR, b"\x1b[5;47m"),
+    PaletteEntry::new(FrameSymbol::BLACK, b"\x1b[25;40m"),
+    PaletteEntry::new(FrameSymbol::BODY_EDGE, b"\x1b[5;47m"),
+    PaletteEntry::new(FrameSymbol::BODY, b"\x1b[5;45m"),
+    PaletteEntry::new(FrameSymbol::BODY_MARK, b"\x1b[5;41m"),
+    PaletteEntry::new(FrameSymbol::RED, b"\x1b[5;41m"),
+    PaletteEntry::new(FrameSymbol::ORANGE, b"\x1b[25;43m"),
+    PaletteEntry::new(FrameSymbol::YELLOW, b"\x1b[5;43m"),
+    PaletteEntry::new(FrameSymbol::GREEN, b"\x1b[5;42m"),
+    PaletteEntry::new(FrameSymbol::BLUE, b"\x1b[25;44m"),
+    PaletteEntry::new(FrameSymbol::INDIGO, b"\x1b[5;44m"),
+    PaletteEntry::new(FrameSymbol::FACE, b"\x1b[5;40m"),
+    PaletteEntry::new(FrameSymbol::BLUSH, b"\x1b[5;45m"),
 ];
 
 const FALLBACK_PALETTE: &[PaletteEntry] = &[
-    PaletteEntry::new(b',', b"\x1b[0;34;44m"),
-    PaletteEntry::new(b'.', b"\x1b[1;37;47m"),
-    PaletteEntry::new(b'\'', b"\x1b[0;30;40m"),
-    PaletteEntry::new(b'@', b"\x1b[1;37;47m"),
-    PaletteEntry::new(b'$', b"\x1b[1;35;45m"),
-    PaletteEntry::new(b'-', b"\x1b[1;31;41m"),
-    PaletteEntry::new(b'>', b"\x1b[1;31;41m"),
-    PaletteEntry::new(b'&', b"\x1b[0;33;43m"),
-    PaletteEntry::new(b'+', b"\x1b[1;33;43m"),
-    PaletteEntry::new(b'#', b"\x1b[1;32;42m"),
-    PaletteEntry::new(b'=', b"\x1b[1;34;44m"),
-    PaletteEntry::new(b';', b"\x1b[0;34;44m"),
-    PaletteEntry::new(b'*', b"\x1b[1;30;40m"),
-    PaletteEntry::new(b'%', b"\x1b[1;35;45m"),
+    PaletteEntry::new(FrameSymbol::BACKGROUND, b"\x1b[0;34;44m"),
+    PaletteEntry::new(FrameSymbol::STAR, b"\x1b[1;37;47m"),
+    PaletteEntry::new(FrameSymbol::BLACK, b"\x1b[0;30;40m"),
+    PaletteEntry::new(FrameSymbol::BODY_EDGE, b"\x1b[1;37;47m"),
+    PaletteEntry::new(FrameSymbol::BODY, b"\x1b[1;35;45m"),
+    PaletteEntry::new(FrameSymbol::BODY_MARK, b"\x1b[1;31;41m"),
+    PaletteEntry::new(FrameSymbol::RED, b"\x1b[1;31;41m"),
+    PaletteEntry::new(FrameSymbol::ORANGE, b"\x1b[0;33;43m"),
+    PaletteEntry::new(FrameSymbol::YELLOW, b"\x1b[1;33;43m"),
+    PaletteEntry::new(FrameSymbol::GREEN, b"\x1b[1;32;42m"),
+    PaletteEntry::new(FrameSymbol::BLUE, b"\x1b[1;34;44m"),
+    PaletteEntry::new(FrameSymbol::INDIGO, b"\x1b[0;34;44m"),
+    PaletteEntry::new(FrameSymbol::FACE, b"\x1b[1;30;40m"),
+    PaletteEntry::new(FrameSymbol::BLUSH, b"\x1b[1;35;45m"),
 ];
 
 const VT220_PALETTE: &[PaletteEntry] = &[
-    PaletteEntry::new(b',', b"::"),
-    PaletteEntry::new(b'.', b"@@"),
-    PaletteEntry::new(b'\'', b"  "),
-    PaletteEntry::new(b'@', b"##"),
-    PaletteEntry::new(b'$', b"??"),
-    PaletteEntry::new(b'-', b"<>"),
-    PaletteEntry::new(b'>', b"##"),
-    PaletteEntry::new(b'&', b"=="),
-    PaletteEntry::new(b'+', b"--"),
-    PaletteEntry::new(b'#', b"++"),
-    PaletteEntry::new(b'=', b"~~"),
-    PaletteEntry::new(b';', b"$$"),
-    PaletteEntry::new(b'*', b";;"),
-    PaletteEntry::new(b'%', b"()"),
+    PaletteEntry::new(FrameSymbol::BACKGROUND, b"::"),
+    PaletteEntry::new(FrameSymbol::STAR, b"@@"),
+    PaletteEntry::new(FrameSymbol::BLACK, b"  "),
+    PaletteEntry::new(FrameSymbol::BODY_EDGE, b"##"),
+    PaletteEntry::new(FrameSymbol::BODY, b"??"),
+    PaletteEntry::new(FrameSymbol::BODY_MARK, b"<>"),
+    PaletteEntry::new(FrameSymbol::RED, b"##"),
+    PaletteEntry::new(FrameSymbol::ORANGE, b"=="),
+    PaletteEntry::new(FrameSymbol::YELLOW, b"--"),
+    PaletteEntry::new(FrameSymbol::GREEN, b"++"),
+    PaletteEntry::new(FrameSymbol::BLUE, b"~~"),
+    PaletteEntry::new(FrameSymbol::INDIGO, b"$$"),
+    PaletteEntry::new(FrameSymbol::FACE, b";;"),
+    PaletteEntry::new(FrameSymbol::BLUSH, b"()"),
 ];
 
 const VT100_ASCII_PALETTE: &[PaletteEntry] = &[
-    PaletteEntry::new(b',', b"."),
-    PaletteEntry::new(b'.', b"@"),
-    PaletteEntry::new(b'\'', b" "),
-    PaletteEntry::new(b'@', b"#"),
-    PaletteEntry::new(b'$', b"?"),
-    PaletteEntry::new(b'-', b"O"),
-    PaletteEntry::new(b'>', b"#"),
-    PaletteEntry::new(b'&', b"="),
-    PaletteEntry::new(b'+', b"-"),
-    PaletteEntry::new(b'#', b"+"),
-    PaletteEntry::new(b'=', b"~"),
-    PaletteEntry::new(b';', b"$"),
-    PaletteEntry::new(b'*', b";"),
-    PaletteEntry::new(b'%', b"o"),
+    PaletteEntry::new(FrameSymbol::BACKGROUND, b"."),
+    PaletteEntry::new(FrameSymbol::STAR, b"@"),
+    PaletteEntry::new(FrameSymbol::BLACK, b" "),
+    PaletteEntry::new(FrameSymbol::BODY_EDGE, b"#"),
+    PaletteEntry::new(FrameSymbol::BODY, b"?"),
+    PaletteEntry::new(FrameSymbol::BODY_MARK, b"O"),
+    PaletteEntry::new(FrameSymbol::RED, b"#"),
+    PaletteEntry::new(FrameSymbol::ORANGE, b"="),
+    PaletteEntry::new(FrameSymbol::YELLOW, b"-"),
+    PaletteEntry::new(FrameSymbol::GREEN, b"+"),
+    PaletteEntry::new(FrameSymbol::BLUE, b"~"),
+    PaletteEntry::new(FrameSymbol::INDIGO, b"$"),
+    PaletteEntry::new(FrameSymbol::FACE, b";"),
+    PaletteEntry::new(FrameSymbol::BLUSH, b"o"),
 ];
 
 const TRUE_COLOR_PALETTE: &[PaletteEntry] = &[
-    PaletteEntry::new(b',', b"\x1b[48;2;0;49;105m"),
-    PaletteEntry::new(b'.', b"\x1b[48;2;255;255;255m"),
-    PaletteEntry::new(b'\'', b"\x1b[48;2;0;0;0m"),
-    PaletteEntry::new(b'@', b"\x1b[48;2;255;205;152m"),
-    PaletteEntry::new(b'$', b"\x1b[48;2;255;169;255m"),
-    PaletteEntry::new(b'-', b"\x1b[48;2;255;76;152m"),
-    PaletteEntry::new(b'>', b"\x1b[48;2;255;25;0m"),
-    PaletteEntry::new(b'&', b"\x1b[48;2;255;154;0m"),
-    PaletteEntry::new(b'+', b"\x1b[48;2;255;240;0m"),
-    PaletteEntry::new(b'#', b"\x1b[48;2;40;220;0m"),
-    PaletteEntry::new(b'=', b"\x1b[48;2;0;144;255m"),
-    PaletteEntry::new(b';', b"\x1b[48;2;104;68;255m"),
-    PaletteEntry::new(b'*', b"\x1b[48;2;153;153;153m"),
-    PaletteEntry::new(b'%', b"\x1b[48;2;255;163;152m"),
+    PaletteEntry::new(FrameSymbol::BACKGROUND, b"\x1b[48;2;0;49;105m"),
+    PaletteEntry::new(FrameSymbol::STAR, b"\x1b[48;2;255;255;255m"),
+    PaletteEntry::new(FrameSymbol::BLACK, b"\x1b[48;2;0;0;0m"),
+    PaletteEntry::new(FrameSymbol::BODY_EDGE, b"\x1b[48;2;255;205;152m"),
+    PaletteEntry::new(FrameSymbol::BODY, b"\x1b[48;2;255;169;255m"),
+    PaletteEntry::new(FrameSymbol::BODY_MARK, b"\x1b[48;2;255;76;152m"),
+    PaletteEntry::new(FrameSymbol::RED, b"\x1b[48;2;255;25;0m"),
+    PaletteEntry::new(FrameSymbol::ORANGE, b"\x1b[48;2;255;154;0m"),
+    PaletteEntry::new(FrameSymbol::YELLOW, b"\x1b[48;2;255;240;0m"),
+    PaletteEntry::new(FrameSymbol::GREEN, b"\x1b[48;2;40;220;0m"),
+    PaletteEntry::new(FrameSymbol::BLUE, b"\x1b[48;2;0;144;255m"),
+    PaletteEntry::new(FrameSymbol::INDIGO, b"\x1b[48;2;104;68;255m"),
+    PaletteEntry::new(FrameSymbol::FACE, b"\x1b[48;2;153;153;153m"),
+    PaletteEntry::new(FrameSymbol::BLUSH, b"\x1b[48;2;255;163;152m"),
 ];
 
 impl Palette {
@@ -234,11 +234,12 @@ impl Palette {
     }
 
     fn set(&mut self, entry: PaletteEntry) {
-        self.colors[entry.symbol as usize] = entry.value;
+        self.colors[entry.symbol.as_byte() as usize] = entry.value;
     }
 
-    fn color(&self, symbol: u8) -> &'static [u8] {
-        self.colors[symbol as usize]
+    #[inline]
+    fn color(&self, symbol: FrameSymbol) -> &'static [u8] {
+        self.colors[symbol.as_byte() as usize]
     }
 }
 
@@ -420,8 +421,28 @@ impl<'a> Renderer<'a> {
         elapsed_seconds: u64,
     ) {
         let mut last = 0u8;
-        let frame = FRAMES[frame_index];
-        const RAINBOW: &[u8] = b",,>>&&&+++###==;;;,,";
+        const RAINBOW: &[FrameSymbol] = &[
+            FrameSymbol::BACKGROUND,
+            FrameSymbol::BACKGROUND,
+            FrameSymbol::RED,
+            FrameSymbol::RED,
+            FrameSymbol::ORANGE,
+            FrameSymbol::ORANGE,
+            FrameSymbol::ORANGE,
+            FrameSymbol::YELLOW,
+            FrameSymbol::YELLOW,
+            FrameSymbol::YELLOW,
+            FrameSymbol::GREEN,
+            FrameSymbol::GREEN,
+            FrameSymbol::GREEN,
+            FrameSymbol::BLUE,
+            FrameSymbol::BLUE,
+            FrameSymbol::INDIGO,
+            FrameSymbol::INDIGO,
+            FrameSymbol::INDIGO,
+            FrameSymbol::BACKGROUND,
+            FrameSymbol::BACKGROUND,
+        ];
 
         for y in state.min_row..state.max_row {
             for x in state.min_col..state.max_col {
@@ -432,20 +453,23 @@ impl<'a> Renderer<'a> {
                         mod_x = 1 - mod_x;
                     }
                     let index = (mod_x + y - 23) as usize;
-                    RAINBOW.get(index).copied().unwrap_or(b',')
+                    RAINBOW
+                        .get(index)
+                        .copied()
+                        .unwrap_or(FrameSymbol::BACKGROUND)
                 } else if !(0..FRAME_HEIGHT as i32).contains(&y)
                     || !(0..FRAME_WIDTH as i32).contains(&x)
                 {
-                    b','
+                    FrameSymbol::BACKGROUND
                 } else {
-                    frame[y as usize].as_bytes()[x as usize]
+                    frame_symbol(frame_index, y as usize, x as usize)
                 };
 
                 match self.palette.output {
                     Some(output) => {
                         let escape = self.palette.color(color);
-                        if color != last && !escape.is_empty() {
-                            last = color;
+                        if color.as_byte() != last && !escape.is_empty() {
+                            last = color.as_byte();
                             out.push_bytes(escape);
                         }
                         out.push_bytes(output);
@@ -508,7 +532,7 @@ impl RenderLoop {
 
     fn advance_frame(&mut self) {
         self.frame_index += 1;
-        if self.frame_index == FRAMES.len() {
+        if self.frame_index == frame_count() {
             self.frame_index = 0;
         }
     }
@@ -690,7 +714,7 @@ mod tests {
     fn render_loop_wraps_frame_indices() {
         let mut render_loop = RenderLoop::new(0);
 
-        for _ in 0..FRAMES.len() {
+        for _ in 0..frame_count() {
             assert!(!render_loop.finish_frame(Instant::now(), 0));
         }
 
@@ -738,8 +762,8 @@ mod tests {
     fn palette_uses_terminal_specific_entries() {
         let palette = Palette::new(TerminalType::Vt100Ascii);
 
-        assert_eq!(palette.color(b','), b".");
-        assert_eq!(palette.color(b'@'), b"#");
+        assert_eq!(palette.color(FrameSymbol::BACKGROUND), b".");
+        assert_eq!(palette.color(FrameSymbol::BODY_EDGE), b"#");
         assert_eq!(palette.output, None);
     }
 
@@ -748,7 +772,10 @@ mod tests {
         let fallback = Palette::new(TerminalType::Fallback);
         let vtnt = Palette::new(TerminalType::Vtnt);
 
-        assert_eq!(fallback.color(b','), vtnt.color(b','));
+        assert_eq!(
+            fallback.color(FrameSymbol::BACKGROUND),
+            vtnt.color(FrameSymbol::BACKGROUND)
+        );
         assert_eq!(fallback.output, Some(UTF8_BLOCKS));
         assert_eq!(vtnt.output, Some(CP437_BLOCKS));
     }
@@ -757,7 +784,7 @@ mod tests {
     fn unknown_palette_symbols_are_empty() {
         let palette = Palette::new(TerminalType::TrueColor);
 
-        assert_eq!(palette.color(b'?'), EMPTY);
+        assert_eq!(palette.colors[b'?' as usize], EMPTY);
     }
 
     #[test]

@@ -33,25 +33,11 @@
 - Performance benchmark harness：`--benchmark --frames ...` 結束時輸出 key=value 統計，包含 frame count、elapsed、FPS、總 bytes、平均/max frame bytes 與 MiB/s。
 - Benchmark snapshot 文件：`BENCHMARKS.md` 記錄可重跑的本機性能樣本，README 保留方法與連結，不硬寫不可追溯的性能宣稱。
 - CLI Option Spec 資料化：用 `OPTION_SPECS` 集中短選項、長選項與 arity，parser 不再分散維護 `match name` / `long_to_short` / `option_requires_value`。
+- FrameSymbol / animation 語意型別：frame raw strings 收在 `animation.rs` 內部，renderer 透過 `FrameSymbol` / `frame_symbol()` 取得語意化 symbol，palette lookup 仍是 O(1) array index。
 
 ## 未實做方向
 
-### 1. FrameSymbol / animation 語意型別
-
-動畫資料目前仍是 raw byte symbol。這很快，但語意偏 C。可以考慮輕量 newtype：
-
-```rust
-struct FrameSymbol(u8);
-```
-
-不建議急著改成完整 enum，因為 render hot path 會變囉嗦，也可能增加轉換成本。frame consistency tests 已先補上；後續只在 newtype 能清楚降低錯誤機率時再做。
-
-完成標準：
-
-- 若引入 `FrameSymbol`，palette lookup 仍是 O(1) 且不增加 allocation。
-- 現有 frame consistency tests 繼續保護 frame data 正確性。
-
-### 2. 錯誤語意整理
+### 1. 錯誤語意整理
 
 目前多數錯誤用 `io::Result` 即可，但如果 render、telnet、runtime 的錯誤面繼續擴大，可以新增 app-level error enum。
 
@@ -74,7 +60,6 @@ enum AppError {
 ## 建議順序
 
 1. app-level error enum，只有當 runtime / telnet / CLI 錯誤面真的需要統一語意時再做
-2. FrameSymbol / animation newtype，只有在能明確降低 frame data 風險時再做
 
 ## Review Checklist
 

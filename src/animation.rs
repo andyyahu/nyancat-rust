@@ -1,6 +1,58 @@
 pub const FRAME_WIDTH: usize = 64;
 pub const FRAME_HEIGHT: usize = 64;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct FrameSymbol(u8);
+
+impl FrameSymbol {
+    pub(crate) const BACKGROUND: Self = Self(b',');
+    pub(crate) const STAR: Self = Self(b'.');
+    pub(crate) const BLACK: Self = Self(b'\'');
+    pub(crate) const BODY_EDGE: Self = Self(b'@');
+    pub(crate) const BODY: Self = Self(b'$');
+    pub(crate) const BODY_MARK: Self = Self(b'-');
+    pub(crate) const RED: Self = Self(b'>');
+    pub(crate) const ORANGE: Self = Self(b'&');
+    pub(crate) const YELLOW: Self = Self(b'+');
+    pub(crate) const GREEN: Self = Self(b'#');
+    pub(crate) const BLUE: Self = Self(b'=');
+    pub(crate) const INDIGO: Self = Self(b';');
+    pub(crate) const FACE: Self = Self(b'*');
+    pub(crate) const BLUSH: Self = Self(b'%');
+
+    #[inline]
+    const fn from_byte(byte: u8) -> Self {
+        Self(byte)
+    }
+
+    #[inline]
+    pub(crate) const fn as_byte(self) -> u8 {
+        self.0
+    }
+
+    #[cfg(test)]
+    #[inline]
+    pub(crate) const fn is_renderable(self) -> bool {
+        matches!(
+            self,
+            Self::BACKGROUND
+                | Self::STAR
+                | Self::BLACK
+                | Self::BODY_EDGE
+                | Self::BODY
+                | Self::BODY_MARK
+                | Self::RED
+                | Self::ORANGE
+                | Self::YELLOW
+                | Self::GREEN
+                | Self::BLUE
+                | Self::INDIGO
+                | Self::FACE
+                | Self::BLUSH
+        )
+    }
+}
+
 const FRAME0: [&str; FRAME_HEIGHT] = [
     ",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.,,,,,,,,,,,,,,,,,,,,,,,,,",
     ",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.,.,,,,,,,,,,,,,,,,,,,,,,,,",
@@ -805,10 +857,20 @@ const FRAME11: [&str; FRAME_HEIGHT] = [
     ",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,",
 ];
 
-pub const FRAMES: [&[&str; FRAME_HEIGHT]; 12] = [
+const FRAMES: [&[&str; FRAME_HEIGHT]; 12] = [
     &FRAME0, &FRAME1, &FRAME2, &FRAME3, &FRAME4, &FRAME5, &FRAME6, &FRAME7, &FRAME8, &FRAME9,
     &FRAME10, &FRAME11,
 ];
+
+#[inline]
+pub(crate) fn frame_count() -> usize {
+    FRAMES.len()
+}
+
+#[inline]
+pub(crate) fn frame_symbol(frame_index: usize, row: usize, col: usize) -> FrameSymbol {
+    FrameSymbol::from_byte(FRAMES[frame_index][row].as_bytes()[col])
+}
 
 #[cfg(test)]
 mod tests {
@@ -839,32 +901,13 @@ mod tests {
     fn all_frame_symbols_are_renderable() {
         for (frame_index, frame) in FRAMES.iter().enumerate() {
             for (row_index, row) in frame.iter().enumerate() {
-                for (column_index, symbol) in row.bytes().enumerate() {
+                for (column_index, symbol) in row.bytes().map(FrameSymbol::from_byte).enumerate() {
                     assert!(
-                        is_renderable_symbol(symbol),
+                        symbol.is_renderable(),
                         "frame {frame_index}, row {row_index}, column {column_index} contains unsupported symbol {symbol:?}"
                     );
                 }
             }
         }
-    }
-
-    fn is_renderable_symbol(symbol: u8) -> bool {
-        matches!(
-            symbol,
-            b',' | b'.'
-                | b'\''
-                | b'@'
-                | b'$'
-                | b'-'
-                | b'>'
-                | b'&'
-                | b'+'
-                | b'#'
-                | b'='
-                | b';'
-                | b'*'
-                | b'%'
-        )
     }
 }
