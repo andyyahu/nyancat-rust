@@ -33,6 +33,8 @@ benchmark: frames=100000 elapsed_s=0.123456 fps=810005.18 bytes=400200000 avg_fr
 
 Reported values depend on hardware, terminal mode, build profile, and output destination. Redirect stdout to `/dev/null` when measuring rendering throughput instead of terminal drawing speed.
 
+See [`BENCHMARKS.md`](BENCHMARKS.md) for recent local benchmark snapshots.
+
 ## 🚀 Quick Start
 
 ### Build and Run
