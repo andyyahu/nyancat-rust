@@ -1,6 +1,8 @@
 # Rustification Plan
 
-這份文件記錄 `refactor/rustify-core` 的 rustification 階段成果：目標不是把程式「寫得像 Rust」而已，而是在不犧牲效能與相容性的前提下，逐步擺脫披著 Rust 外皮的 C-style 結構。
+這份文件記錄 rustification 階段成果：目標不是把程式「寫得像 Rust」而已，而是在不犧牲效能與相容性的前提下，逐步擺脫披著 Rust 外皮的 C-style 結構。
+
+本階段原本在 `refactor/rustify-core` 上完成，現在已進入 `master` 主線。後續工程方向請以 [`ROADMAP.md`](ROADMAP.md) 為準。
 
 ## 階段狀態
 
@@ -9,6 +11,7 @@
 - [`ARCHITECTURE.md`](ARCHITECTURE.md)：記錄目前模組邊界、資料流、runtime policy 與擴充準則。
 - [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)：記錄 release candidate / merge 前的驗證基準。
 - [`BENCHMARKS.md`](BENCHMARKS.md)：記錄可重跑的本機 benchmark snapshot。
+- [`ROADMAP.md`](ROADMAP.md)：記錄 rustification 後的 release hardening、效能紀律與模組優雅化方向。
 
 剩下的 app-level error enum 屬於條件式保留項，只有當錯誤面真的需要跨模組統一語意時才實作。
 
@@ -72,6 +75,7 @@ enum AppError {
 
 - app-level error enum，只有當 runtime / telnet / CLI 錯誤面真的需要統一語意時再做。
 - 新功能若改變模組責任，先更新 `ARCHITECTURE.md`。
+- 後續工程優先順序以 `ROADMAP.md` 為準。
 - 發行前以 `RELEASE_CHECKLIST.md` 為準。
 
 ## Review Checklist

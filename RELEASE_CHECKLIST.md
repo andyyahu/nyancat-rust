@@ -7,7 +7,8 @@ This checklist is the baseline for merging release candidates and publishing bui
 - Confirm the target version in `Cargo.toml`.
 - Confirm `CHANGELOG` has an entry for the target version.
 - Confirm `README.md`, `nyancat.1`, and systemd files still match the current CLI and deployment model.
-- Confirm `RUSTIFICATION_PLAN.md` and `ARCHITECTURE.md` reflect any structural changes made during the release cycle.
+- Confirm `ARCHITECTURE.md` reflects any structural changes made during the release cycle.
+- Confirm `ROADMAP.md` reflects any newly accepted engineering priorities or deferred work.
 - Confirm the working tree is clean before final verification.
 
 ## Required Verification

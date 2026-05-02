@@ -115,3 +115,4 @@ For render or terminal-output changes, compare smoke output byte counts and insp
 - Keep terminal cleanup behavior centralized in `runtime.rs`.
 - Keep telnet parser/state logic independently testable.
 - Update `ARCHITECTURE.md` when a module takes on a new responsibility.
+- Update `ROADMAP.md` when a deferred technical direction becomes accepted project scope.

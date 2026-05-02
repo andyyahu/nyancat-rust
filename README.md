@@ -162,7 +162,9 @@ scripts/benchmark_matrix.sh 100000
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) documents module boundaries, data flow, runtime policy, and extension guidelines.
 - [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) defines the verification baseline for release candidates.
-- [`RUSTIFICATION_PLAN.md`](RUSTIFICATION_PLAN.md) records the completed rustification phase and remaining conditional follow-up.
+- [`BENCHMARKS.md`](BENCHMARKS.md) records repeatable local benchmark snapshots.
+- [`RUSTIFICATION_PLAN.md`](RUSTIFICATION_PLAN.md) records the completed rustification phase.
+- [`ROADMAP.md`](ROADMAP.md) tracks post-rustification engineering priorities.
 
 ## Credits
 
