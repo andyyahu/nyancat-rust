@@ -20,6 +20,10 @@ const LINEMODE: u8 = 34;
 const NEW_ENVIRON: u8 = 39;
 const SEND: u8 = 1;
 
+trait ByteSource {
+    fn read_byte(&mut self, deadline: Instant) -> io::Result<Option<u8>>;
+}
+
 struct TimeoutReader {
     buffer: [u8; 1024],
     head: usize,
@@ -34,7 +38,9 @@ impl TimeoutReader {
             tail: 0,
         }
     }
+}
 
+impl ByteSource for TimeoutReader {
     fn read_byte(&mut self, deadline: Instant) -> io::Result<Option<u8>> {
         if self.head < self.tail {
             let byte = self.buffer[self.head];
@@ -360,11 +366,18 @@ impl TelnetNegotiation {
 }
 
 pub(crate) fn negotiate_telnet(out: &mut impl Write) -> io::Result<TelnetInfo> {
+    let mut input = TimeoutReader::new();
+    negotiate_telnet_with_source(out, &mut input)
+}
+
+fn negotiate_telnet_with_source(
+    out: &mut impl Write,
+    input: &mut impl ByteSource,
+) -> io::Result<TelnetInfo> {
     let mut negotiation = TelnetNegotiation::new();
     out.write_all(&negotiation.initial_output())?;
     out.flush()?;
 
-    let mut input = TimeoutReader::new();
     let mut parser = TelnetParser::new();
     let mut deadline = Instant::now() + Duration::from_secs(1);
 
@@ -403,6 +416,27 @@ mod tests {
         haystack
             .windows(needle.len())
             .any(|window| window == needle)
+    }
+
+    struct ScriptedByteSource {
+        bytes: Vec<u8>,
+        position: usize,
+    }
+
+    impl ScriptedByteSource {
+        fn new(bytes: Vec<u8>) -> Self {
+            Self { bytes, position: 0 }
+        }
+    }
+
+    impl ByteSource for ScriptedByteSource {
+        fn read_byte(&mut self, _deadline: Instant) -> io::Result<Option<u8>> {
+            let Some(byte) = self.bytes.get(self.position).copied() else {
+                return Ok(None);
+            };
+            self.position += 1;
+            Ok(Some(byte))
+        }
     }
 
     #[test]
@@ -513,5 +547,34 @@ mod tests {
 
         assert_eq!(step, NegotiationStep::default());
         assert!(negotiation.is_complete());
+    }
+
+    #[test]
+    fn negotiate_telnet_reads_scripted_terminal_info() {
+        let mut input = ScriptedByteSource::new(vec![
+            IAC, WILL, TTYPE, IAC, SB, TTYPE, 0, b'x', b't', b'e', b'r', b'm', IAC, SE, IAC, SB,
+            NAWS, 0, 100, 0, 40, IAC, SE,
+        ]);
+        let mut output = Vec::new();
+
+        let info = negotiate_telnet_with_source(&mut output, &mut input).unwrap();
+
+        assert_eq!(info.term.as_deref(), Some("xterm"));
+        assert_eq!(info.size, Some(TerminalSize::new(100, 40)));
+        assert!(contains(&output, &[IAC, DO, TTYPE]));
+        assert!(contains(&output, &[IAC, DO, NAWS]));
+        assert!(contains(&output, &[IAC, SB, TTYPE, SEND, IAC, SE]));
+    }
+
+    #[test]
+    fn negotiate_telnet_stops_when_scripted_input_ends() {
+        let mut input = ScriptedByteSource::new(Vec::new());
+        let mut output = Vec::new();
+
+        let info = negotiate_telnet_with_source(&mut output, &mut input).unwrap();
+
+        assert_eq!(info, TelnetInfo::default());
+        assert!(contains(&output, &[IAC, DO, TTYPE]));
+        assert!(contains(&output, &[IAC, DO, NAWS]));
     }
 }
