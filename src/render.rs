@@ -2,6 +2,7 @@ use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES};
 use crate::cli::Config;
 use crate::runtime::take_resize_pending;
 use crate::terminal::{TerminalSize, TerminalType, terminal_size};
+use std::fmt;
 use std::io::{self, Write};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -242,7 +243,95 @@ impl Palette {
 }
 
 pub(crate) enum RunOutcome {
-    FrameLimitReached { clear_screen: bool },
+    FrameLimitReached {
+        clear_screen: bool,
+        benchmark: Option<BenchmarkReport>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct BenchmarkReport {
+    frames: u32,
+    elapsed: Duration,
+    bytes: u64,
+    max_frame_bytes: usize,
+}
+
+impl BenchmarkReport {
+    fn frames_per_second(self) -> f64 {
+        let seconds = self.elapsed.as_secs_f64();
+        if seconds == 0.0 {
+            0.0
+        } else {
+            self.frames as f64 / seconds
+        }
+    }
+
+    fn average_frame_bytes(self) -> f64 {
+        if self.frames == 0 {
+            0.0
+        } else {
+            self.bytes as f64 / self.frames as f64
+        }
+    }
+
+    fn throughput_mib_per_second(self) -> f64 {
+        let seconds = self.elapsed.as_secs_f64();
+        if seconds == 0.0 {
+            0.0
+        } else {
+            self.bytes as f64 / 1_048_576.0 / seconds
+        }
+    }
+}
+
+impl fmt::Display for BenchmarkReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "benchmark: frames={} elapsed_s={:.6} fps={:.2} bytes={} avg_frame_bytes={:.2} max_frame_bytes={} throughput_mib_s={:.2}",
+            self.frames,
+            self.elapsed.as_secs_f64(),
+            self.frames_per_second(),
+            self.bytes,
+            self.average_frame_bytes(),
+            self.max_frame_bytes,
+            self.throughput_mib_per_second()
+        )
+    }
+}
+
+struct BenchmarkTracker {
+    start: Instant,
+    frames: u32,
+    bytes: u64,
+    max_frame_bytes: usize,
+}
+
+impl BenchmarkTracker {
+    fn new() -> Self {
+        Self {
+            start: Instant::now(),
+            frames: 0,
+            bytes: 0,
+            max_frame_bytes: 0,
+        }
+    }
+
+    fn record_frame(&mut self, frame_bytes: usize) {
+        self.frames = self.frames.saturating_add(1);
+        self.bytes = self.bytes.saturating_add(frame_bytes as u64);
+        self.max_frame_bytes = self.max_frame_bytes.max(frame_bytes);
+    }
+
+    fn finish(self) -> BenchmarkReport {
+        BenchmarkReport {
+            frames: self.frames,
+            elapsed: self.start.elapsed(),
+            bytes: self.bytes,
+            max_frame_bytes: self.max_frame_bytes,
+        }
+    }
 }
 
 struct FrameBuffer {
@@ -458,6 +547,7 @@ pub(crate) fn run(
     let renderer = Renderer::new(&config, &palette);
     let mut render_loop = RenderLoop::new(config.delay_ms);
     let mut buffer = FrameBuffer::with_capacity(32 * 1024);
+    let mut benchmark = config.benchmark.then(BenchmarkTracker::new);
 
     loop {
         let frame_start = Instant::now();
@@ -477,10 +567,14 @@ pub(crate) fn run(
         );
         stdout.write_all(buffer.as_bytes())?;
         stdout.flush()?;
+        if let Some(benchmark) = &mut benchmark {
+            benchmark.record_frame(buffer.as_bytes().len());
+        }
 
         if render_loop.finish_frame(frame_start, config.frame_count) {
             return Ok(RunOutcome::FrameLimitReached {
                 clear_screen: config.clear_screen,
+                benchmark: benchmark.map(BenchmarkTracker::finish),
             });
         }
     }
@@ -609,6 +703,35 @@ mod tests {
 
         assert!(render_loop.finish_frame(Instant::now(), 1));
         assert_eq!(render_loop.frame_index(), 0);
+    }
+
+    #[test]
+    fn benchmark_report_calculates_rates() {
+        let report = BenchmarkReport {
+            frames: 100,
+            elapsed: Duration::from_millis(250),
+            bytes: 1_048_576,
+            max_frame_bytes: 12_345,
+        };
+
+        assert_eq!(report.frames_per_second(), 400.0);
+        assert_eq!(report.average_frame_bytes(), 10_485.76);
+        assert_eq!(report.throughput_mib_per_second(), 4.0);
+    }
+
+    #[test]
+    fn benchmark_report_formats_stable_key_value_output() {
+        let report = BenchmarkReport {
+            frames: 2,
+            elapsed: Duration::from_secs(1),
+            bytes: 100,
+            max_frame_bytes: 60,
+        };
+
+        assert_eq!(
+            report.to_string(),
+            "benchmark: frames=2 elapsed_s=1.000000 fps=2.00 bytes=100 avg_frame_bytes=50.00 max_frame_bytes=60 throughput_mib_s=0.00"
+        );
     }
 
     #[test]

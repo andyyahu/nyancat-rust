@@ -35,7 +35,7 @@ fn main() -> ExitCode {
         config.delay_ms = 0;
         let _ = writeln!(
             io::stderr(),
-            "\x1b[1;33mWARNING:\x1b[0m Benchmark mode enabled. Delay set to 0ms."
+            "\x1b[1;33mWARNING:\x1b[0m Benchmark mode enabled. Delay set to 0ms; use --frames for a completion report."
         );
     }
 
@@ -68,17 +68,36 @@ fn main() -> ExitCode {
     let mut state = RenderState::new(&config, terminal_size);
     state.finalize_auto_crop();
 
-    match run(config, state, palette) {
-        Ok(RunOutcome::FrameLimitReached { clear_screen }) => {
+    let mut benchmark_report = None;
+    let mut run_error = None;
+
+    let exit_code = match run(config, state, palette) {
+        Ok(RunOutcome::FrameLimitReached {
+            clear_screen,
+            benchmark,
+        }) => {
             terminal_session.set_clear_screen(clear_screen);
+            benchmark_report = benchmark;
             ExitCode::SUCCESS
         }
         Err(error) => {
             if error.kind() == io::ErrorKind::BrokenPipe {
-                return ExitCode::SUCCESS;
+                ExitCode::SUCCESS
+            } else {
+                run_error = Some(error);
+                ExitCode::SUCCESS
             }
-            let _ = writeln!(io::stderr(), "nyancat: {error}");
-            ExitCode::SUCCESS
         }
+    };
+
+    drop(terminal_session);
+
+    if let Some(error) = run_error {
+        let _ = writeln!(io::stderr(), "nyancat: {error}");
     }
+    if let Some(report) = benchmark_report {
+        let _ = writeln!(io::stderr(), "{report}");
+    }
+
+    exit_code
 }

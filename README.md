@@ -18,16 +18,20 @@
 
 ## ⚡ Performance
 
-The Rust edition is optimized for high-throughput rendering. In our benchmarks, it significantly outperforms the original C implementation.
+The Rust edition includes a repeatable benchmark mode for local measurements. Benchmark mode disables frame delay and prints a stable key-value report to stderr when a frame limit is reached.
 
-### Benchmark Results (100,000 frames)
+```bash
+cargo build --release
+target/release/nyancat --benchmark --frames 100000 --no-title --no-clear --no-counter >/dev/null
+```
 
-| Implementation | Time (Total) | Throughput (FPS) |
-| :--- | :--- | :--- |
-| Original C (klange/nyancat) | 0.654s | ~152,905 FPS |
-| **Rust Edition** | **0.109s** | **~917,431 FPS** |
+Example report format:
 
-*Test conditions: 100,000 frames rendered to `/dev/null` with delays disabled (using `-b` flag for Rust), running on Linux.*
+```text
+benchmark: frames=100000 elapsed_s=0.123456 fps=810005.18 bytes=400200000 avg_frame_bytes=4002.00 max_frame_bytes=4002 throughput_mib_s=3091.33
+```
+
+Reported values depend on hardware, terminal mode, build profile, and output destination. Redirect stdout to `/dev/null` when measuring rendering throughput instead of terminal drawing speed.
 
 ## 🚀 Quick Start
 
