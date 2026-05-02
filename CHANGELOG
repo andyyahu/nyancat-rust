@@ -1,16 +1,16 @@
 1.6.0 (Rust Edition) - 2026-05-01
     * COMPLETE REWRITE IN RUST:
-        * Significant performance boost (~6x faster than C version, pushing 900k+ FPS).
+        * Significant performance improvements with repeatable benchmark reporting.
         * Memory-safe rendering using Rust idiomatic patterns.
         * Pure Cargo build system (legacy Makefiles removed).
     * NEW FEATURES:
         * TrueColor Support: Added -T/--truecolor flag for 24-bit HD rendering.
-        * Benchmark Mode: Added -b/--benchmark flag with 0ms delay for stress testing.
+        * Benchmark Mode: Added -b/--benchmark flag with 0ms delay and key-value render stats.
     * OPTIMIZATIONS:
         * Enabled LTO and aggressive release optimizations.
         * Pre-computed ANSI color palettes for faster rendering.
     * DOCUMENTATION:
-        * Completely updated README.md and nyancat.1 man page.
+        * Updated README.md, nyancat.1, release checklist, architecture notes, and benchmark snapshots.
 
 ---
 Historical records for the original C implementation (v1.0 - v1.5.2)

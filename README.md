@@ -22,7 +22,13 @@ The Rust edition includes a repeatable benchmark mode for local measurements. Be
 
 ```bash
 cargo build --release
-target/release/nyancat --benchmark --frames 100000 --no-title --no-clear --no-counter >/dev/null
+env TERM=xterm-256color target/release/nyancat --benchmark --frames 100000 --no-title --no-clear --no-counter >/dev/null
+```
+
+To run the standard benchmark matrix:
+
+```bash
+scripts/benchmark_matrix.sh 100000
 ```
 
 Example report format:
@@ -132,6 +138,13 @@ nyancat -T
 cargo build --release
 ```
 
+### Verification
+
+```bash
+scripts/release_check.sh
+scripts/benchmark_matrix.sh 100000
+```
+
 ### Project structure
 
 - `src/main.rs` - Startup orchestration
@@ -142,6 +155,7 @@ cargo build --release
 - `src/terminal.rs` - Terminal size and type detection
 - `src/runtime.rs` - Exit and signal handling
 - `src/sys.rs` - Unix FFI bindings
+- `scripts/` - Release verification and benchmark helpers
 - `systemd/` - Systemd service files for telnet server integration
 
 ### Engineering docs

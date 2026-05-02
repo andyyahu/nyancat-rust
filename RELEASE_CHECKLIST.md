@@ -12,25 +12,32 @@ This checklist is the baseline for merging release candidates and publishing bui
 
 ## Required Verification
 
-Run from the repository root:
+Run the automated baseline from the repository root:
 
 ```bash
-cargo fmt --check
-cargo test
-cargo clippy --all-targets --all-features -- -D warnings
-cargo build --release
+scripts/release_check.sh
 ```
+
+The script covers:
+
+- `cargo fmt --check`
+- `cargo test`
+- `cargo clippy --all-targets --all-features -- -D warnings`
+- `cargo build --release`
+- Smoke tests and byte count checks
+
+If you need to run the steps manually, use the commands in the sections below.
 
 ## Smoke Tests
 
-Run the release binary after `cargo build --release`:
+Run the release binary after `cargo build --release`, or use `scripts/release_check.sh`:
 
 ```bash
-target/release/nyancat --frames 1 --no-title --no-clear --no-counter >/tmp/nyancat-rust-smoke.out
+env TERM=xterm-256color target/release/nyancat --frames 1 --no-title --no-clear --no-counter >/tmp/nyancat-rust-smoke.out
 target/release/nyancat --telnet --skip-intro --frames 1 --no-title --no-clear --no-counter >/tmp/nyancat-rust-telnet-smoke.out
-target/release/nyancat --truecolor --frames 1 --no-title --no-clear --no-counter >/tmp/nyancat-rust-truecolor-smoke.out
-target/release/nyancat --frames 1 --width 40 --height 24 --no-title --no-clear --no-counter >/tmp/nyancat-rust-crop-smoke.out
-target/release/nyancat --benchmark --frames 3 --no-title --no-clear --no-counter >/tmp/nyancat-rust-benchmark-smoke.out 2>/tmp/nyancat-rust-benchmark-smoke.err
+env TERM=xterm-256color target/release/nyancat --truecolor --frames 1 --no-title --no-clear --no-counter >/tmp/nyancat-rust-truecolor-smoke.out
+env TERM=xterm-256color target/release/nyancat --frames 1 --width 40 --height 24 --no-title --no-clear --no-counter >/tmp/nyancat-rust-crop-smoke.out
+env TERM=xterm-256color target/release/nyancat --benchmark --frames 3 --no-title --no-clear --no-counter >/tmp/nyancat-rust-benchmark-smoke.out 2>/tmp/nyancat-rust-benchmark-smoke.err
 target/release/nyancat --wat
 ```
 
@@ -64,10 +71,7 @@ When performance changes are intentional, refresh `BENCHMARKS.md`.
 Recommended commands:
 
 ```bash
-cargo build --release
-env TERM=xterm-256color target/release/nyancat --benchmark --frames 100000 --no-title --no-clear --no-counter >/dev/null
-env TERM=xterm-256color target/release/nyancat --benchmark --truecolor --frames 100000 --no-title --no-clear --no-counter >/dev/null
-env TERM=vt100 target/release/nyancat --benchmark --frames 100000 --width 40 --height 24 --no-title --no-clear --no-counter >/dev/null
+scripts/benchmark_matrix.sh 100000
 ```
 
 Record:

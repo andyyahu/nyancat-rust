@@ -5,8 +5,7 @@ Benchmark snapshots are local measurements, not portable guarantees. Hardware, C
 For comparable render-throughput measurements, build in release mode and redirect stdout to `/dev/null`:
 
 ```bash
-cargo build --release
-env TERM=xterm-256color target/release/nyancat --benchmark --frames 100000 --no-title --no-clear --no-counter >/dev/null
+scripts/benchmark_matrix.sh 100000
 ```
 
 ## 2026-05-02
