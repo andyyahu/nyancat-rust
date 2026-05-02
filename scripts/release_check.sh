@@ -27,13 +27,13 @@ echo "== cargo fmt --check =="
 cargo fmt --check
 
 echo "== cargo test =="
-cargo test
+cargo test --locked
 
 echo "== cargo clippy =="
-cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --locked --all-targets --all-features -- -D warnings
 
 echo "== cargo build --release =="
-cargo build --release
+cargo build --release --locked
 
 echo "== smoke tests =="
 env TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > "$normal_out"

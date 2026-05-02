@@ -22,10 +22,12 @@ scripts/release_check.sh
 The script covers:
 
 - `cargo fmt --check`
-- `cargo test`
-- `cargo clippy --all-targets --all-features -- -D warnings`
-- `cargo build --release`
+- `cargo test --locked`
+- `cargo clippy --locked --all-targets --all-features -- -D warnings`
+- `cargo build --release --locked`
 - Smoke tests, byte count checks, CLI error checks, and `--help` option coverage
+
+GitHub Actions also runs the release check on stable Rust and a separate MSRV build/test job for Rust 1.85.0.
 
 If you need to run the steps manually, use the commands in the sections below.
 

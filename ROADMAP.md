@@ -26,7 +26,7 @@
 
 - 保持 `scripts/release_check.sh` 作為 release gate。
 - 讓 release checklist 覆蓋 clean checkout、tagging、artifact、manpage、systemd files。
-- 考慮加入 CI workflow，至少跑 fmt / test / clippy。
+- 維護 GitHub Actions CI，讓 stable Rust 跑 release check，MSRV job 跑 Rust 1.85.0 test / release build。
 - 發行前用 `scripts/benchmark_matrix.sh` 更新 `BENCHMARKS.md`。
 
 完成標準：

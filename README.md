@@ -3,6 +3,7 @@
 > A fast, colorful Nyancat animation for your terminal, written in Rust.
 
 [![License](https://img.shields.io/badge/license-NCSA-blue.svg)](LICENSE)
+[![CI](https://github.com/andyyahu/nyancat/actions/workflows/ci.yml/badge.svg)](https://github.com/andyyahu/nyancat/actions/workflows/ci.yml)
 
 ![Nyancat](http://nyancat.dakko.us/nyancat.png)
 
