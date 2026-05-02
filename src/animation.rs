@@ -809,3 +809,62 @@ pub const FRAMES: [&[&str; FRAME_HEIGHT]; 12] = [
     &FRAME0, &FRAME1, &FRAME2, &FRAME3, &FRAME4, &FRAME5, &FRAME6, &FRAME7, &FRAME8, &FRAME9,
     &FRAME10, &FRAME11,
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_frames_have_expected_dimensions() {
+        assert!(!FRAMES.is_empty());
+
+        for (frame_index, frame) in FRAMES.iter().enumerate() {
+            assert_eq!(
+                frame.len(),
+                FRAME_HEIGHT,
+                "frame {frame_index} has unexpected height"
+            );
+
+            for (row_index, row) in frame.iter().enumerate() {
+                assert_eq!(
+                    row.len(),
+                    FRAME_WIDTH,
+                    "frame {frame_index}, row {row_index} has unexpected width"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn all_frame_symbols_are_renderable() {
+        for (frame_index, frame) in FRAMES.iter().enumerate() {
+            for (row_index, row) in frame.iter().enumerate() {
+                for (column_index, symbol) in row.bytes().enumerate() {
+                    assert!(
+                        is_renderable_symbol(symbol),
+                        "frame {frame_index}, row {row_index}, column {column_index} contains unsupported symbol {symbol:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    fn is_renderable_symbol(symbol: u8) -> bool {
+        matches!(
+            symbol,
+            b',' | b'.'
+                | b'\''
+                | b'@'
+                | b'$'
+                | b'-'
+                | b'>'
+                | b'&'
+                | b'+'
+                | b'#'
+                | b'='
+                | b';'
+                | b'*'
+                | b'%'
+        )
+    }
+}
