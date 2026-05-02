@@ -164,24 +164,41 @@ struct OptionSpec {
     short: char,
     long: &'static str,
     arity: OptionArity,
+    value_name: Option<&'static str>,
+    description: &'static str,
 }
 
 impl OptionSpec {
-    const fn flag(id: OptionId, short: char, long: &'static str) -> Self {
+    const fn flag(
+        id: OptionId,
+        short: char,
+        long: &'static str,
+        description: &'static str,
+    ) -> Self {
         Self {
             id,
             short,
             long,
             arity: OptionArity::Flag,
+            value_name: None,
+            description,
         }
     }
 
-    const fn value(id: OptionId, short: char, long: &'static str) -> Self {
+    const fn value(
+        id: OptionId,
+        short: char,
+        long: &'static str,
+        value_name: &'static str,
+        description: &'static str,
+    ) -> Self {
         Self {
             id,
             short,
             long,
             arity: OptionArity::Value,
+            value_name: Some(value_name),
+            description,
         }
     }
 
@@ -191,23 +208,106 @@ impl OptionSpec {
 }
 
 const OPTION_SPECS: &[OptionSpec] = &[
-    OptionSpec::flag(OptionId::Intro, 'i', "intro"),
-    OptionSpec::flag(OptionId::SkipIntro, 'I', "skip-intro"),
-    OptionSpec::flag(OptionId::Telnet, 't', "telnet"),
-    OptionSpec::flag(OptionId::TrueColor, 'T', "truecolor"),
-    OptionSpec::flag(OptionId::NoCounter, 'n', "no-counter"),
-    OptionSpec::flag(OptionId::NoTitle, 's', "no-title"),
-    OptionSpec::flag(OptionId::NoClear, 'e', "no-clear"),
-    OptionSpec::flag(OptionId::Benchmark, 'b', "benchmark"),
-    OptionSpec::flag(OptionId::Help, 'h', "help"),
-    OptionSpec::value(OptionId::Delay, 'd', "delay"),
-    OptionSpec::value(OptionId::Frames, 'f', "frames"),
-    OptionSpec::value(OptionId::MinRows, 'r', "min-rows"),
-    OptionSpec::value(OptionId::MaxRows, 'R', "max-rows"),
-    OptionSpec::value(OptionId::MinCols, 'c', "min-cols"),
-    OptionSpec::value(OptionId::MaxCols, 'C', "max-cols"),
-    OptionSpec::value(OptionId::Width, 'W', "width"),
-    OptionSpec::value(OptionId::Height, 'H', "height"),
+    OptionSpec::flag(
+        OptionId::Intro,
+        'i',
+        "intro",
+        "Show the introduction / about information at startup.",
+    ),
+    OptionSpec::flag(
+        OptionId::SkipIntro,
+        'I',
+        "skip-intro",
+        "Skip the introduction in telnet mode.",
+    ),
+    OptionSpec::flag(OptionId::Telnet, 't', "telnet", "Telnet mode."),
+    OptionSpec::flag(
+        OptionId::TrueColor,
+        'T',
+        "truecolor",
+        "Enable 24-bit TrueColor mode (high-definition rendering).",
+    ),
+    OptionSpec::flag(
+        OptionId::NoCounter,
+        'n',
+        "no-counter",
+        "Do not display the timer.",
+    ),
+    OptionSpec::flag(
+        OptionId::NoTitle,
+        's',
+        "no-title",
+        "Do not set the titlebar text.",
+    ),
+    OptionSpec::flag(
+        OptionId::NoClear,
+        'e',
+        "no-clear",
+        "Do not clear the display between frames.",
+    ),
+    OptionSpec::flag(
+        OptionId::Benchmark,
+        'b',
+        "benchmark",
+        "Run in benchmark mode (0ms delay). Warning: high CPU usage.",
+    ),
+    OptionSpec::flag(OptionId::Help, 'h', "help", "Show this help message."),
+    OptionSpec::value(
+        OptionId::Delay,
+        'd',
+        "delay",
+        "ms",
+        "Delay image rendering by anywhere between 10ms and 1000ms.",
+    ),
+    OptionSpec::value(
+        OptionId::Frames,
+        'f',
+        "frames",
+        "frames",
+        "Display the requested number of frames, then quit.",
+    ),
+    OptionSpec::value(
+        OptionId::MinRows,
+        'r',
+        "min-rows",
+        "row",
+        "Crop the animation from the top.",
+    ),
+    OptionSpec::value(
+        OptionId::MaxRows,
+        'R',
+        "max-rows",
+        "row",
+        "Crop the animation from the bottom.",
+    ),
+    OptionSpec::value(
+        OptionId::MinCols,
+        'c',
+        "min-cols",
+        "col",
+        "Crop the animation from the left.",
+    ),
+    OptionSpec::value(
+        OptionId::MaxCols,
+        'C',
+        "max-cols",
+        "col",
+        "Crop the animation from the right.",
+    ),
+    OptionSpec::value(
+        OptionId::Width,
+        'W',
+        "width",
+        "width",
+        "Crop the animation to the given width.",
+    ),
+    OptionSpec::value(
+        OptionId::Height,
+        'H',
+        "height",
+        "height",
+        "Crop the animation to the given height.",
+    ),
 ];
 
 fn option_by_long(long: &str) -> Option<OptionSpec> {
@@ -369,30 +469,25 @@ fn apply_value_option(
     Ok(())
 }
 
+pub(crate) fn usage_text(program: &str) -> String {
+    let mut usage = format!("Terminal Nyancat\n\nusage: {program} [options]\n\n");
+
+    for spec in OPTION_SPECS {
+        let option = match spec.value_name {
+            Some(value_name) => format!("-{}, --{} <{}>", spec.short, spec.long, value_name),
+            None => format!("-{}, --{}", spec.short, spec.long),
+        };
+        usage.push_str(&format!(
+            "  {option:<25}\x1b[3m{}\x1b[0m\n",
+            spec.description
+        ));
+    }
+
+    usage
+}
+
 pub(crate) fn print_usage(program: &str) {
-    println!(
-        "Terminal Nyancat\n\
-         \n\
-         usage: {program} [-hIitnTb] [-f \x1b[3mframes\x1b[0m]\n\
-         \n\
-          -i --intro      \x1b[3mShow the introduction / about information at startup.\x1b[0m\n\
-          -I --skip-intro \x1b[3mSkip the introduction in telnet mode.\x1b[0m\n\
-          -t --telnet     \x1b[3mTelnet mode.\x1b[0m\n\
-          -T --truecolor  \x1b[3mEnable 24-bit TrueColor mode (high-definition rendering)\x1b[0m\n\
-          -n --no-counter \x1b[3mDo not display the timer\x1b[0m\n\
-          -s --no-title   \x1b[3mDo not set the titlebar text\x1b[0m\n\
-          -e --no-clear   \x1b[3mDo not clear the display between frames\x1b[0m\n\
-          -b --benchmark  \x1b[3mRun in benchmark mode (0ms delay). Warning: high CPU usage\x1b[0m\n\
-          -d --delay      \x1b[3mDelay image rendering by anywhere between 10ms and 1000ms\n\
-          -f --frames     \x1b[3mDisplay the requested number of frames, then quit\x1b[0m\n\
-          -r --min-rows   \x1b[3mCrop the animation from the top\x1b[0m\n\
-          -R --max-rows   \x1b[3mCrop the animation from the bottom\x1b[0m\n\
-          -c --min-cols   \x1b[3mCrop the animation from the left\x1b[0m\n\
-          -C --max-cols   \x1b[3mCrop the animation from the right\x1b[0m\n\
-          -W --width      \x1b[3mCrop the animation to the given width\x1b[0m\n\
-          -H --height     \x1b[3mCrop the animation to the given height\x1b[0m\n\
-          -h --help       \x1b[3mShow this help message.\x1b[0m"
-    );
+    print!("{}", usage_text(program));
 }
 
 #[cfg(test)]
@@ -422,6 +517,38 @@ mod tests {
         assert!(!option_by_long("telnet").unwrap().takes_value());
         assert_eq!(option_by_long("wat"), None);
         assert_eq!(option_by_short('?'), None);
+    }
+
+    #[test]
+    fn option_specs_are_unique() {
+        for (index, spec) in OPTION_SPECS.iter().enumerate() {
+            for other in &OPTION_SPECS[index + 1..] {
+                assert_ne!(spec.short, other.short);
+                assert_ne!(spec.long, other.long);
+            }
+        }
+    }
+
+    #[test]
+    fn usage_text_lists_every_option_spec() {
+        let usage = usage_text("nyancat");
+
+        for spec in OPTION_SPECS {
+            assert!(usage.contains(&format!("-{}, --{}", spec.short, spec.long)));
+            assert!(usage.contains(spec.description));
+            if let Some(value_name) = spec.value_name {
+                assert!(usage.contains(&format!("<{value_name}>")));
+            }
+        }
+    }
+
+    #[test]
+    fn usage_text_resets_italic_descriptions() {
+        let usage = usage_text("nyancat");
+
+        for line in usage.lines().filter(|line| line.contains("\x1b[3m")) {
+            assert!(line.ends_with("\x1b[0m"));
+        }
     }
 
     #[test]

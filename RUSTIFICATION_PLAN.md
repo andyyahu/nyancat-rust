@@ -43,6 +43,7 @@
 - Performance benchmark harness：`--benchmark --frames ...` 結束時輸出 key=value 統計，包含 frame count、elapsed、FPS、總 bytes、平均/max frame bytes 與 MiB/s。
 - Benchmark snapshot 文件：`BENCHMARKS.md` 記錄可重跑的本機性能樣本，README 保留方法與連結，不硬寫不可追溯的性能宣稱。
 - CLI Option Spec 資料化：用 `OPTION_SPECS` 集中短選項、長選項與 arity，parser 不再分散維護 `match name` / `long_to_short` / `option_requires_value`。
+- CLI help 生成化：`--help` 輸出由 `OPTION_SPECS` 產生，避免 parser option 清單和使用說明各自漂移。
 - FrameSymbol / animation 語意型別：frame raw strings 收在 `animation.rs` 內部，renderer 透過 `FrameSymbol` / `frame_symbol()` 取得語意化 symbol，palette lookup 仍是 O(1) array index。
 
 ## 保留方向

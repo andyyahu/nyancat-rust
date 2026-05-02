@@ -24,7 +24,7 @@ The script covers:
 - `cargo test`
 - `cargo clippy --all-targets --all-features -- -D warnings`
 - `cargo build --release`
-- Smoke tests and byte count checks
+- Smoke tests, byte count checks, CLI error checks, and `--help` option coverage
 
 If you need to run the steps manually, use the commands in the sections below.
 

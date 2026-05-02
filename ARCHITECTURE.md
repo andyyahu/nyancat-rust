@@ -55,6 +55,8 @@ CLI arguments become `cli::Config`. `main.rs` combines `Config`, terminal metada
 
 Frame data remains private to `animation.rs`. Rendering obtains symbols through `frame_symbol(frame, row, col)`, which returns `FrameSymbol`. Palette lookup remains an O(1) array index via `FrameSymbol::as_byte()`.
 
+CLI option metadata lives in `cli::OPTION_SPECS`. Parsing, value arity, and generated `--help` output all use that table so public option drift is caught in one module.
+
 ## Runtime And Signals
 
 Normal execution restores the terminal through `TerminalSession` drop. Signal paths cannot rely on normal unwinding, so they use raw async-signal-compatible output and `sys::exit`.
@@ -107,6 +109,7 @@ For render or terminal-output changes, compare smoke output byte counts and insp
 ## Extension Guidelines
 
 - Add CLI options through `OPTION_SPECS` first, then implement behavior.
+- Keep `--help` text generated from `OPTION_SPECS`; do not add hand-maintained option lists inside `cli.rs`.
 - Keep raw frame strings inside `animation.rs`.
 - Keep unsafe code inside `sys.rs`.
 - Keep terminal cleanup behavior centralized in `runtime.rs`.
