@@ -12,11 +12,38 @@ pub(crate) enum TerminalType {
     TrueColor,
 }
 
-pub(crate) fn terminal_size() -> (i32, i32) {
-    sys::stdin_terminal_size().unwrap_or((80, 24))
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct TerminalSize {
+    pub(crate) width: i32,
+    pub(crate) height: i32,
 }
 
-pub(crate) fn detect_terminal_type(term: Option<&str>, terminal_width: i32) -> TerminalType {
+impl TerminalSize {
+    pub(crate) const fn new(width: i32, height: i32) -> Self {
+        Self { width, height }
+    }
+
+    pub(crate) fn with_width(self, width: i32) -> Self {
+        Self { width, ..self }
+    }
+}
+
+impl Default for TerminalSize {
+    fn default() -> Self {
+        Self {
+            width: 80,
+            height: 24,
+        }
+    }
+}
+
+pub(crate) fn terminal_size() -> TerminalSize {
+    sys::stdin_terminal_size()
+        .map(|(width, height)| TerminalSize::new(width, height))
+        .unwrap_or_default()
+}
+
+pub(crate) fn detect_terminal_type(term: Option<&str>, size: TerminalSize) -> TerminalType {
     let Some(term) = term else {
         return TerminalType::Ansi16;
     };
@@ -36,7 +63,7 @@ pub(crate) fn detect_terminal_type(term: Option<&str>, terminal_width: i32) -> T
         TerminalType::Xterm256
     } else if term.contains("rxvt") {
         TerminalType::Linux
-    } else if term.contains("vt100") && terminal_width == 40 {
+    } else if term.contains("vt100") && size.width == 40 {
         TerminalType::Vt100Ascii
     } else if term.starts_with("st") {
         TerminalType::Xterm256
@@ -54,15 +81,33 @@ mod tests {
     #[test]
     fn detects_expected_terminal_types() {
         assert_eq!(
-            detect_terminal_type(Some("xterm-256color"), 80),
+            detect_terminal_type(Some("xterm-256color"), TerminalSize::new(80, 24)),
             TerminalType::Xterm256
         );
-        assert_eq!(detect_terminal_type(Some("linux"), 80), TerminalType::Linux);
-        assert_eq!(detect_terminal_type(Some("vt220"), 80), TerminalType::Vt220);
         assert_eq!(
-            detect_terminal_type(Some("vt100"), 40),
+            detect_terminal_type(Some("linux"), TerminalSize::new(80, 24)),
+            TerminalType::Linux
+        );
+        assert_eq!(
+            detect_terminal_type(Some("vt220"), TerminalSize::new(80, 24)),
+            TerminalType::Vt220
+        );
+        assert_eq!(
+            detect_terminal_type(Some("vt100"), TerminalSize::new(40, 24)),
             TerminalType::Vt100Ascii
         );
-        assert_eq!(detect_terminal_type(None, 80), TerminalType::Ansi16);
+        assert_eq!(
+            detect_terminal_type(None, TerminalSize::new(80, 24)),
+            TerminalType::Ansi16
+        );
+    }
+
+    #[test]
+    fn terminal_size_defaults_to_standard_dimensions() {
+        assert_eq!(TerminalSize::default(), TerminalSize::new(80, 24));
+        assert_eq!(
+            TerminalSize::new(80, 24).with_width(40),
+            TerminalSize::new(40, 24)
+        );
     }
 }

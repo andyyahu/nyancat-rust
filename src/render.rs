@@ -1,7 +1,7 @@
 use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FRAMES};
 use crate::cli::Config;
 use crate::runtime::take_resize_pending;
-use crate::terminal::{TerminalType, terminal_size};
+use crate::terminal::{TerminalSize, TerminalType, terminal_size};
 use std::io::{self, Write};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -12,8 +12,7 @@ const CP437_BLOCKS: &[u8] = &[0xdb, 0xdb];
 const UTF8_BLOCKS: &[u8] = &[0xe2, 0x96, 0x88, 0xe2, 0x96, 0x88];
 
 pub(crate) struct RenderState {
-    terminal_width: i32,
-    terminal_height: i32,
+    terminal_size: TerminalSize,
     min_row: i32,
     max_row: i32,
     min_col: i32,
@@ -23,13 +22,12 @@ pub(crate) struct RenderState {
 }
 
 impl RenderState {
-    pub(crate) fn new(config: &Config, terminal_width: i32, terminal_height: i32) -> Self {
+    pub(crate) fn new(config: &Config, terminal_size: TerminalSize) -> Self {
         let rows = config.crop.rows;
         let cols = config.crop.cols;
 
         Self {
-            terminal_width,
-            terminal_height,
+            terminal_size,
             min_row: rows.min_or_default(),
             max_row: rows.max_or_default(),
             min_col: cols.min_or_default(),
@@ -48,9 +46,8 @@ impl RenderState {
         }
     }
 
-    fn update_terminal_size(&mut self, width: i32, height: i32) {
-        self.terminal_width = width;
-        self.terminal_height = height;
+    fn update_terminal_size(&mut self, size: TerminalSize) {
+        self.terminal_size = size;
         if self.using_automatic_width {
             self.recalculate_width();
         }
@@ -60,13 +57,13 @@ impl RenderState {
     }
 
     fn recalculate_width(&mut self) {
-        self.min_col = (FRAME_WIDTH as i32 - self.terminal_width / 2) / 2;
-        self.max_col = (FRAME_WIDTH as i32 + self.terminal_width / 2) / 2;
+        self.min_col = (FRAME_WIDTH as i32 - self.terminal_size.width / 2) / 2;
+        self.max_col = (FRAME_WIDTH as i32 + self.terminal_size.width / 2) / 2;
     }
 
     fn recalculate_height(&mut self) {
-        self.min_row = (FRAME_HEIGHT as i32 - (self.terminal_height - 1)) / 2;
-        self.max_row = (FRAME_HEIGHT as i32 + (self.terminal_height - 1)) / 2;
+        self.min_row = (FRAME_HEIGHT as i32 - (self.terminal_size.height - 1)) / 2;
+        self.max_row = (FRAME_HEIGHT as i32 + (self.terminal_size.height - 1)) / 2;
     }
 }
 
@@ -280,8 +277,7 @@ pub(crate) fn run(
         let frame_start = Instant::now();
 
         if !config.telnet && take_resize_pending() {
-            let (width, height) = terminal_size();
-            state.update_terminal_size(width, height);
+            state.update_terminal_size(terminal_size());
         }
 
         buffer.clear();
@@ -371,7 +367,7 @@ fn render_frame(
     }
 
     if config.show_counter {
-        let width = (state.terminal_width - 29 - elapsed_seconds.to_string().len() as i32) / 2;
+        let width = (state.terminal_size.width - 29 - elapsed_seconds.to_string().len() as i32) / 2;
         for _ in 0..width.max(0) {
             out.push(b' ');
         }
@@ -448,7 +444,7 @@ mod tests {
     use super::*;
 
     fn render_test_frame(config: &Config, elapsed_seconds: u64) -> Vec<u8> {
-        let mut state = RenderState::new(config, 80, 24);
+        let mut state = RenderState::new(config, TerminalSize::new(80, 24));
         state.finalize_auto_crop();
         let palette = Palette::new(TerminalType::Vt100Ascii);
         let mut out = Vec::new();

@@ -1,4 +1,5 @@
 use crate::sys;
+use crate::terminal::TerminalSize;
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
@@ -114,14 +115,13 @@ impl TelnetState {
 #[derive(Debug, Default, Eq, PartialEq)]
 pub(crate) struct TelnetInfo {
     pub(crate) term: Option<String>,
-    pub(crate) width: Option<i32>,
-    pub(crate) height: Option<i32>,
+    pub(crate) size: Option<TerminalSize>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 enum Subnegotiation {
     TerminalType(String),
-    WindowSize { width: i32, height: i32 },
+    WindowSize(TerminalSize),
 }
 
 fn parse_subnegotiation(bytes: &[u8]) -> Option<Subnegotiation> {
@@ -129,10 +129,10 @@ fn parse_subnegotiation(bytes: &[u8]) -> Option<Subnegotiation> {
         Some(TTYPE) if bytes.len() >= 2 => Some(Subnegotiation::TerminalType(
             String::from_utf8_lossy(&bytes[2..]).into_owned(),
         )),
-        Some(NAWS) if bytes.len() >= 5 => Some(Subnegotiation::WindowSize {
-            width: u16::from_be_bytes([bytes[1], bytes[2]]) as i32,
-            height: u16::from_be_bytes([bytes[3], bytes[4]]) as i32,
-        }),
+        Some(NAWS) if bytes.len() >= 5 => Some(Subnegotiation::WindowSize(TerminalSize::new(
+            u16::from_be_bytes([bytes[1], bytes[2]]) as i32,
+            u16::from_be_bytes([bytes[3], bytes[4]]) as i32,
+        ))),
         _ => None,
     }
 }
@@ -349,9 +349,8 @@ impl TelnetNegotiation {
                 self.got_ttype = true;
                 true
             }
-            Some(Subnegotiation::WindowSize { width, height }) => {
-                self.info.width = Some(width);
-                self.info.height = Some(height);
+            Some(Subnegotiation::WindowSize(size)) => {
+                self.info.size = Some(size);
                 self.got_naws = true;
                 true
             }
@@ -418,10 +417,7 @@ mod tests {
     fn parses_window_size_subnegotiation() {
         assert_eq!(
             parse_subnegotiation(&[NAWS, 0, 120, 0, 40]),
-            Some(Subnegotiation::WindowSize {
-                width: 120,
-                height: 40,
-            })
+            Some(Subnegotiation::WindowSize(TerminalSize::new(120, 40)))
         );
     }
 
@@ -505,8 +501,7 @@ mod tests {
         let step = negotiation.handle_event(TelnetEvent::Subnegotiation(vec![NAWS, 0, 80, 0, 24]));
 
         assert!(step.extend_deadline);
-        assert_eq!(negotiation.info.width, Some(80));
-        assert_eq!(negotiation.info.height, Some(24));
+        assert_eq!(negotiation.info.size, Some(TerminalSize::new(80, 24)));
         assert!(negotiation.is_complete());
     }
 

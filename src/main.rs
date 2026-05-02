@@ -48,32 +48,27 @@ fn main() -> ExitCode {
     set_clear_screen_on_exit(config.clear_screen);
     install_signal_handlers();
 
-    let (term, mut terminal_width, terminal_height) = if config.telnet {
+    let (term, mut terminal_size) = if config.telnet {
         let mut stdout = io::stdout().lock();
         let info = match negotiate_telnet(&mut stdout) {
             Ok(info) => info,
             Err(_) => return restore_and_succeed(config.clear_screen),
         };
-        (
-            info.term,
-            info.width.unwrap_or(80),
-            info.height.unwrap_or(24),
-        )
+        (info.term, info.size.unwrap_or_default())
     } else {
-        let (width, height) = terminal_size();
-        (env::var("TERM").ok(), width, height)
+        (env::var("TERM").ok(), terminal_size())
     };
 
-    let mut terminal_type = detect_terminal_type(term.as_deref(), terminal_width);
+    let mut terminal_type = detect_terminal_type(term.as_deref(), terminal_size);
     if config.truecolor {
         terminal_type = TerminalType::TrueColor;
     }
     if terminal_type == TerminalType::Vt100Ascii {
-        terminal_width = 40;
+        terminal_size = terminal_size.with_width(40);
     }
 
     let palette = Palette::new(terminal_type);
-    let mut state = RenderState::new(&config, terminal_width, terminal_height);
+    let mut state = RenderState::new(&config, terminal_size);
     state.finalize_auto_crop();
 
     match run(config, state, palette) {
