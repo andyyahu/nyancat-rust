@@ -1,5 +1,5 @@
 use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FrameSymbol, frame_count, frame_symbol};
-use crate::cli::{Config, FrameLimit};
+use crate::cli::{AxisCrop, AxisRange, Config, FrameLimit};
 use crate::runtime::take_resize_pending;
 use crate::terminal::{TerminalSize, TerminalType, terminal_size};
 use std::fmt;
@@ -14,57 +14,58 @@ const UTF8_BLOCKS: &[u8] = &[0xe2, 0x96, 0x88, 0xe2, 0x96, 0x88];
 
 pub(crate) struct RenderState {
     terminal_size: TerminalSize,
+    row_crop: AxisCrop,
+    col_crop: AxisCrop,
     min_row: i32,
     max_row: i32,
     min_col: i32,
     max_col: i32,
-    using_automatic_width: bool,
-    using_automatic_height: bool,
 }
 
 impl RenderState {
     pub(crate) fn new(config: &Config, terminal_size: TerminalSize) -> Self {
-        let rows = config.crop.rows;
-        let cols = config.crop.cols;
-
-        Self {
+        let mut state = Self {
             terminal_size,
-            min_row: rows.min_or_default(),
-            max_row: rows.max_or_default(),
-            min_col: cols.min_or_default(),
-            max_col: cols.max_or_default(),
-            using_automatic_width: cols.is_automatic_range(),
-            using_automatic_height: rows.is_automatic_range(),
-        }
-    }
-
-    pub(crate) fn finalize_auto_crop(&mut self) {
-        if self.using_automatic_width {
-            self.recalculate_width();
-        }
-        if self.using_automatic_height {
-            self.recalculate_height();
-        }
+            row_crop: config.crop.rows,
+            col_crop: config.crop.cols,
+            min_row: 0,
+            max_row: 0,
+            min_col: 0,
+            max_col: 0,
+        };
+        state.recalculate_bounds();
+        state
     }
 
     fn update_terminal_size(&mut self, size: TerminalSize) {
         self.terminal_size = size;
-        if self.using_automatic_width {
-            self.recalculate_width();
-        }
-        if self.using_automatic_height {
-            self.recalculate_height();
+        if self.row_crop.is_terminal_dependent() || self.col_crop.is_terminal_dependent() {
+            self.recalculate_bounds();
         }
     }
 
-    fn recalculate_width(&mut self) {
-        self.min_col = (FRAME_WIDTH as i32 - self.terminal_size.width / 2) / 2;
-        self.max_col = (FRAME_WIDTH as i32 + self.terminal_size.width / 2) / 2;
+    fn recalculate_bounds(&mut self) {
+        let rows = self.row_crop.resolve(self.automatic_row_range());
+        let cols = self.col_crop.resolve(self.automatic_col_range());
+
+        self.min_row = rows.min;
+        self.max_row = rows.max;
+        self.min_col = cols.min;
+        self.max_col = cols.max;
     }
 
-    fn recalculate_height(&mut self) {
-        self.min_row = (FRAME_HEIGHT as i32 - (self.terminal_size.height - 1)) / 2;
-        self.max_row = (FRAME_HEIGHT as i32 + (self.terminal_size.height - 1)) / 2;
+    fn automatic_col_range(&self) -> AxisRange {
+        AxisRange::new(
+            (FRAME_WIDTH as i32 - self.terminal_size.width / 2) / 2,
+            (FRAME_WIDTH as i32 + self.terminal_size.width / 2) / 2,
+        )
+    }
+
+    fn automatic_row_range(&self) -> AxisRange {
+        AxisRange::new(
+            (FRAME_HEIGHT as i32 - (self.terminal_size.height - 1)) / 2,
+            (FRAME_HEIGHT as i32 + (self.terminal_size.height - 1)) / 2,
+        )
     }
 }
 
@@ -669,8 +670,7 @@ mod tests {
         terminal_size: TerminalSize,
         elapsed_seconds: u64,
     ) -> Vec<u8> {
-        let mut state = RenderState::new(config, terminal_size);
-        state.finalize_auto_crop();
+        let state = RenderState::new(config, terminal_size);
         let palette = Palette::new(terminal_type);
         let renderer = Renderer::new(config, &palette);
         let mut out = FrameBuffer::with_capacity(32 * 1024);

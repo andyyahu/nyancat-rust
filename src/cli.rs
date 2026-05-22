@@ -9,45 +9,90 @@ pub(crate) struct CropBounds {
     pub(crate) cols: AxisCrop,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) struct AxisCrop {
-    min: Option<i32>,
-    max: Option<i32>,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct AxisRange {
+    pub(crate) min: i32,
+    pub(crate) max: i32,
 }
 
-impl AxisCrop {
-    const LEGACY_AUTO_VALUE: i32 = -1;
-
-    fn centered(frame_size: i32, size: i32) -> Self {
-        Self {
-            min: Some((frame_size - size) / 2),
-            max: Some((frame_size + size) / 2),
-        }
+impl AxisRange {
+    pub(crate) const fn new(min: i32, max: i32) -> Self {
+        Self { min, max }
     }
 
-    fn set_min(&mut self, min: i32) {
-        self.min = Some(min);
+    const fn with_min(self, min: i32) -> Self {
+        Self { min, ..self }
     }
 
-    fn set_max(&mut self, max: i32) {
-        self.max = Some(max);
-    }
-
-    pub(crate) fn min_or_default(self) -> i32 {
-        self.min.unwrap_or(Self::LEGACY_AUTO_VALUE)
-    }
-
-    pub(crate) fn max_or_default(self) -> i32 {
-        self.max.unwrap_or(Self::LEGACY_AUTO_VALUE)
-    }
-
-    pub(crate) fn is_automatic_range(self) -> bool {
-        self.min_or_default() == self.max_or_default()
+    const fn with_max(self, max: i32) -> Self {
+        Self { max, ..self }
     }
 
     #[cfg(test)]
-    fn as_pair(self) -> (i32, i32) {
-        (self.min_or_default(), self.max_or_default())
+    const fn as_pair(self) -> (i32, i32) {
+        (self.min, self.max)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum AxisCrop {
+    #[default]
+    Auto,
+    AutoBounded {
+        min: Option<i32>,
+        max: Option<i32>,
+    },
+    Fixed(AxisRange),
+}
+
+impl AxisCrop {
+    fn centered(frame_size: i32, size: i32) -> Self {
+        Self::Fixed(AxisRange::new(
+            (frame_size - size) / 2,
+            (frame_size + size) / 2,
+        ))
+    }
+
+    fn set_min(&mut self, min: i32) {
+        *self = match *self {
+            Self::Auto => Self::AutoBounded {
+                min: Some(min),
+                max: None,
+            },
+            Self::AutoBounded { max, .. } => Self::AutoBounded {
+                min: Some(min),
+                max,
+            },
+            Self::Fixed(range) => Self::Fixed(range.with_min(min)),
+        };
+    }
+
+    fn set_max(&mut self, max: i32) {
+        *self = match *self {
+            Self::Auto => Self::AutoBounded {
+                min: None,
+                max: Some(max),
+            },
+            Self::AutoBounded { min, .. } => Self::AutoBounded {
+                min,
+                max: Some(max),
+            },
+            Self::Fixed(range) => Self::Fixed(range.with_max(max)),
+        };
+    }
+
+    pub(crate) fn resolve(self, automatic: AxisRange) -> AxisRange {
+        match self {
+            Self::Auto => automatic,
+            Self::AutoBounded { min, max } => {
+                AxisRange::new(min.unwrap_or(automatic.min), max.unwrap_or(automatic.max))
+            }
+            Self::Fixed(range) => range,
+        }
+    }
+
+    pub(crate) fn is_terminal_dependent(self) -> bool {
+        matches!(self, Self::Auto | Self::AutoBounded { .. })
     }
 }
 
@@ -543,8 +588,14 @@ mod tests {
         let mut config = Config::default();
         apply_value_option(&mut config, value_spec('W'), "-W", "40").unwrap();
         apply_value_option(&mut config, value_spec('H'), "-H", "24").unwrap();
-        assert_eq!(config.crop.cols.as_pair(), (12, 52));
-        assert_eq!(config.crop.rows.as_pair(), (20, 44));
+        assert_eq!(
+            config.crop.cols.resolve(AxisRange::new(0, 0)).as_pair(),
+            (12, 52)
+        );
+        assert_eq!(
+            config.crop.rows.resolve(AxisRange::new(0, 0)).as_pair(),
+            (20, 44)
+        );
     }
 
     #[test]
@@ -595,10 +646,39 @@ mod tests {
     fn default_crop_is_automatic() {
         let config = Config::default();
 
-        assert_eq!(config.crop.cols.as_pair(), (-1, -1));
-        assert_eq!(config.crop.rows.as_pair(), (-1, -1));
-        assert!(config.crop.cols.is_automatic_range());
-        assert!(config.crop.rows.is_automatic_range());
+        assert_eq!(config.crop.cols, AxisCrop::Auto);
+        assert_eq!(config.crop.rows, AxisCrop::Auto);
+        assert_eq!(
+            config.crop.cols.resolve(AxisRange::new(12, 52)).as_pair(),
+            (12, 52)
+        );
+        assert!(config.crop.cols.is_terminal_dependent());
+        assert!(config.crop.rows.is_terminal_dependent());
+    }
+
+    #[test]
+    fn min_and_max_options_bound_automatic_crop() {
+        let mut config = Config::default();
+        apply_value_option(&mut config, value_spec('r'), "-r", "20").unwrap();
+        apply_value_option(&mut config, value_spec('C'), "-C", "60").unwrap();
+
+        assert_eq!(
+            config.crop.rows.resolve(AxisRange::new(10, 40)).as_pair(),
+            (20, 40)
+        );
+        assert_eq!(
+            config.crop.cols.resolve(AxisRange::new(12, 52)).as_pair(),
+            (12, 60)
+        );
+        assert!(config.crop.rows.is_terminal_dependent());
+        assert!(config.crop.cols.is_terminal_dependent());
+
+        apply_value_option(&mut config, value_spec('R'), "-R", "30").unwrap();
+
+        assert_eq!(
+            config.crop.rows.resolve(AxisRange::new(10, 40)).as_pair(),
+            (20, 30)
+        );
     }
 
     #[test]
@@ -626,8 +706,14 @@ mod tests {
         assert_eq!(config.delay, Duration::from_millis(120));
         assert_eq!(config.frame_limit.map(FrameLimit::get), Some(3));
         assert!(config.skip_intro);
-        assert_eq!(config.crop.cols.as_pair(), (12, 52));
-        assert_eq!(config.crop.rows.as_pair(), (20, 44));
+        assert_eq!(
+            config.crop.cols.resolve(AxisRange::new(0, 0)).as_pair(),
+            (12, 52)
+        );
+        assert_eq!(
+            config.crop.rows.resolve(AxisRange::new(0, 0)).as_pair(),
+            (20, 44)
+        );
     }
 
     #[test]

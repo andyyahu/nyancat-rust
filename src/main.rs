@@ -66,8 +66,7 @@ fn main() -> ExitCode {
     }
 
     let palette = Palette::new(terminal_type);
-    let mut state = RenderState::new(&config, terminal_size);
-    state.finalize_auto_crop();
+    let state = RenderState::new(&config, terminal_size);
 
     let mut benchmark_report = None;
     let mut run_error = None;
