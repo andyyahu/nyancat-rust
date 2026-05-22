@@ -92,7 +92,7 @@ Before making performance claims:
 
 1. Build with `cargo build --release`.
 2. Run `--benchmark --frames ...` with stdout redirected to `/dev/null`.
-3. Record environment and results in `BENCHMARKS.md`.
+3. Record environment and results in the benchmark section of `RELEASE_CHECKLIST.md`.
 
 ## Test Policy
 

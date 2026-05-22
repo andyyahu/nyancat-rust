@@ -1,6 +1,6 @@
 # Roadmap
 
-這份文件記錄 rustification 進入主線後的後續方向。`RUSTIFICATION_PLAN.md` 保留為已完成階段的歷史紀錄；新的工作以這份 roadmap 和 `RELEASE_CHECKLIST.md` 為準。
+這份文件記錄 rustification 進入主線後的後續方向，也保留已完成階段的摘要。新的工程工作以這份 roadmap、`ARCHITECTURE.md` 和 `RELEASE_CHECKLIST.md` 為準。
 
 ## Current State
 
@@ -13,10 +13,26 @@
 
 - `README.md`：使用者入口、基本建置、執行、telnet、benchmark 方法。
 - `ARCHITECTURE.md`：目前模組邊界、資料流、runtime policy、performance policy、extension guidelines。
-- `RELEASE_CHECKLIST.md`：merge / release candidate 前的硬性驗證流程。
-- `BENCHMARKS.md`：本機可重跑的 benchmark snapshot。
-- `RUSTIFICATION_PLAN.md`：已完成的 rustification 階段紀錄。
+- `RELEASE_CHECKLIST.md`：merge / release candidate 前的硬性驗證流程，以及 benchmark snapshot 紀錄。
 - `ROADMAP.md`：後續工程方向與優先順序。
+
+## Completed Rustification
+
+第一階段目標是擺脫「披著 Rust 外皮的 C-style 結構」，同時保留既有 terminal output 行為與 hot path 效能。已完成的核心成果：
+
+- 拆分 `main.rs`，將 CLI、render、runtime、sys、telnet、terminal、animation 分成獨立模組。
+- CLI 改成 `CliAction` / `CliError`，`OPTION_SPECS` 成為 parser 和 `--help` 的單一資料源。
+- `Config` 逐步型別化：`FrameLimit(NonZeroU32)`、`Duration` delay、`AxisCrop` / `AxisRange` 取代 frame/crop magic values。
+- terminal、palette、frame symbol、terminal size 改成語意型別，render hot path 保留 O(1) palette lookup。
+- `RenderState`、`Renderer`、`RenderLoop`、`FrameBuffer` 分離 frame bytes 生成、timing、buffer reuse、telnet newline 和 benchmark accounting。
+- telnet negotiation 拆成 parser、state machine、subnegotiation parser 和 `ByteSource`，可用 scripted input 測 response。
+- `TerminalSession` 用 RAII restore terminal；Unix FFI 和 signal path 集中在 `sys.rs` / `runtime.rs`。
+- release gate、output smoke checks、benchmark report、benchmark matrix 和 CI/MSRV job 已建立。
+
+仍保留的條件式方向：
+
+- app-level error enum 只有在 runtime / telnet / CLI 錯誤語意真的需要跨模組統一時才做。
+- 更大幅的 render / telnet / sys 重構必須先用 release gate 和 benchmark 保護行為。
 
 ## Near-Term Plan
 
@@ -27,13 +43,13 @@
 - 保持 `scripts/release_check.sh` 作為 release gate。
 - 讓 release checklist 覆蓋 clean checkout、tagging、artifact、manpage、systemd files。
 - 維護 GitHub Actions CI，讓 stable Rust 跑 release check，MSRV job 跑 Rust 1.85.0 test / release build。
-- 發行前用 `scripts/benchmark_matrix.sh` 更新 `BENCHMARKS.md`。
+- 發行前用 `scripts/benchmark_matrix.sh` 更新 `RELEASE_CHECKLIST.md` 的 benchmark snapshot。
 
 完成標準：
 
 - clean working tree 可以一鍵跑完 `scripts/release_check.sh`。
 - release tag 前的人工步驟都能在 `RELEASE_CHECKLIST.md` 找到。
-- benchmark 宣稱都能回溯到 `BENCHMARKS.md` 的環境與 commit。
+- benchmark 宣稱都能回溯到 `RELEASE_CHECKLIST.md` 的環境與 commit。
 
 ### 2. Output Regression Coverage
 

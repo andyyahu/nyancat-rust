@@ -40,7 +40,7 @@ benchmark: frames=100000 elapsed_s=0.123456 fps=810005.18 bytes=400200000 avg_fr
 
 Reported values depend on hardware, terminal mode, build profile, and output destination. Redirect stdout to `/dev/null` when measuring rendering throughput instead of terminal drawing speed.
 
-See [`BENCHMARKS.md`](BENCHMARKS.md) for recent local benchmark snapshots.
+See the benchmark section in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md#benchmarking) for recent local snapshots.
 
 ## 🚀 Quick Start
 
@@ -162,10 +162,8 @@ scripts/benchmark_matrix.sh 100000
 ### Engineering docs
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) documents module boundaries, data flow, runtime policy, and extension guidelines.
-- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) defines the verification baseline for release candidates.
-- [`BENCHMARKS.md`](BENCHMARKS.md) records repeatable local benchmark snapshots.
-- [`RUSTIFICATION_PLAN.md`](RUSTIFICATION_PLAN.md) records the completed rustification phase.
-- [`ROADMAP.md`](ROADMAP.md) tracks post-rustification engineering priorities.
+- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) defines the verification baseline and benchmark snapshot record for release candidates.
+- [`ROADMAP.md`](ROADMAP.md) tracks engineering priorities and completed rustification milestones.
 
 ## Credits
 
