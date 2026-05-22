@@ -5,7 +5,7 @@ BIN=${NYANCAT_BIN:-target/release/nyancat}
 FRAMES=${1:-100000}
 
 if [ ! -x "$BIN" ]; then
-    cargo build --release
+    cargo build --release --locked
 fi
 
 echo "# Benchmark Matrix"

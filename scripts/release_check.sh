@@ -11,6 +11,8 @@ crop_out="$TMP/nyancat-rust-crop-smoke.out"
 benchmark_out="$TMP/nyancat-rust-benchmark-smoke.out"
 benchmark_err="$TMP/nyancat-rust-benchmark-smoke.err"
 cli_err="$TMP/nyancat-rust-cli-error.err"
+frames_err="$TMP/nyancat-rust-frames-error.err"
+flag_value_err="$TMP/nyancat-rust-flag-value-error.err"
 help_out="$TMP/nyancat-rust-help.out"
 
 check_bytes() {
@@ -107,8 +109,20 @@ if "$BIN" --wat > "$cli_err" 2>&1; then
     exit 1
 fi
 
+if "$BIN" --frames=-1 > "$frames_err" 2>&1; then
+    echo "expected negative frame count smoke to fail" >&2
+    exit 1
+fi
+
+if "$BIN" --no-counter=false > "$flag_value_err" 2>&1; then
+    echo "expected flag value smoke to fail" >&2
+    exit 1
+fi
+
 grep -F "nyancat: unknown option: --wat" "$cli_err" > /dev/null
 grep -F "Try '$BIN --help' for usage." "$cli_err" > /dev/null
+grep -F "nyancat: value for --frames must be positive: -1" "$frames_err" > /dev/null
+grep -F "nyancat: unexpected value for --no-counter: false" "$flag_value_err" > /dev/null
 grep -F "benchmark: frames=3" "$benchmark_err" > /dev/null
 grep -F "usage: $BIN" "$help_out" > /dev/null
 grep -F -- "-i, --intro" "$help_out" > /dev/null

@@ -1,5 +1,5 @@
 use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FrameSymbol, frame_count, frame_symbol};
-use crate::cli::Config;
+use crate::cli::{Config, FrameLimit};
 use crate::runtime::take_resize_pending;
 use crate::terminal::{TerminalSize, TerminalType, terminal_size};
 use std::fmt;
@@ -502,10 +502,10 @@ struct RenderLoop {
 }
 
 impl RenderLoop {
-    fn new(delay_ms: u64) -> Self {
+    fn new(target_delay: Duration) -> Self {
         Self {
             start: Instant::now(),
-            target_delay: Duration::from_millis(delay_ms),
+            target_delay,
             frame_index: 0,
             frames_rendered: 0,
         }
@@ -519,9 +519,9 @@ impl RenderLoop {
         self.start.elapsed().as_secs()
     }
 
-    fn finish_frame(&mut self, frame_start: Instant, frame_count: u32) -> bool {
+    fn finish_frame(&mut self, frame_start: Instant, frame_limit: Option<FrameLimit>) -> bool {
         self.frames_rendered = self.frames_rendered.saturating_add(1);
-        if frame_count != 0 && self.frames_rendered == frame_count {
+        if frame_limit.is_some_and(|limit| self.frames_rendered == limit.get()) {
             return true;
         }
 
@@ -569,7 +569,7 @@ pub(crate) fn run(
     }
 
     let renderer = Renderer::new(&config, &palette);
-    let mut render_loop = RenderLoop::new(config.delay_ms);
+    let mut render_loop = RenderLoop::new(config.delay);
     let mut buffer = FrameBuffer::with_capacity(32 * 1024);
     let mut benchmark = config.benchmark.then(BenchmarkTracker::new);
 
@@ -595,7 +595,7 @@ pub(crate) fn run(
             benchmark.record_frame(buffer.as_bytes().len());
         }
 
-        if render_loop.finish_frame(frame_start, config.frame_count) {
+        if render_loop.finish_frame(frame_start, config.frame_limit) {
             return Ok(RunOutcome::FrameLimitReached {
                 clear_screen: config.clear_screen,
                 benchmark: benchmark.map(BenchmarkTracker::finish),
@@ -721,19 +721,19 @@ mod tests {
 
     #[test]
     fn render_loop_advances_frame_indices() {
-        let mut render_loop = RenderLoop::new(0);
+        let mut render_loop = RenderLoop::new(Duration::ZERO);
 
         assert_eq!(render_loop.frame_index(), 0);
-        assert!(!render_loop.finish_frame(Instant::now(), 0));
+        assert!(!render_loop.finish_frame(Instant::now(), None));
         assert_eq!(render_loop.frame_index(), 1);
     }
 
     #[test]
     fn render_loop_wraps_frame_indices() {
-        let mut render_loop = RenderLoop::new(0);
+        let mut render_loop = RenderLoop::new(Duration::ZERO);
 
         for _ in 0..frame_count() {
-            assert!(!render_loop.finish_frame(Instant::now(), 0));
+            assert!(!render_loop.finish_frame(Instant::now(), None));
         }
 
         assert_eq!(render_loop.frame_index(), 0);
@@ -741,9 +741,9 @@ mod tests {
 
     #[test]
     fn render_loop_reports_frame_limit_before_advancing() {
-        let mut render_loop = RenderLoop::new(0);
+        let mut render_loop = RenderLoop::new(Duration::ZERO);
 
-        assert!(render_loop.finish_frame(Instant::now(), 1));
+        assert!(render_loop.finish_frame(Instant::now(), FrameLimit::new(1)));
         assert_eq!(render_loop.frame_index(), 0);
     }
 

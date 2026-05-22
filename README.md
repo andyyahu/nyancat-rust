@@ -118,7 +118,7 @@ nyancat -T
 | `-e` | `--no-clear` | Do not clear screen between frames |
 | `-b` | `--benchmark` | Run with 0ms delay (Warning: high CPU) |
 | `-d` | `--delay` | Set delay (10ms - 1000ms) |
-| `-f` | `--frames` | Quit after N frames |
+| `-f` | `--frames` | Quit after a positive number of frames |
 | `-r` | `--min-rows` | Crop the animation from the top |
 | `-R` | `--max-rows` | Crop the animation from the bottom |
 | `-c` | `--min-cols` | Crop the animation from the left |

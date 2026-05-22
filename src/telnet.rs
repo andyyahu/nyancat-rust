@@ -159,7 +159,6 @@ enum TelnetEvent {
     Command(u8),
     Negotiation { command: u8, option: u8 },
     Subnegotiation(Vec<u8>),
-    EndNegotiation,
 }
 
 struct TelnetParser {
@@ -237,8 +236,15 @@ impl TelnetParser {
                 None
             }
             IAC => {
-                self.state = TelnetParserState::Data;
-                Some(TelnetEvent::EndNegotiation)
+                if in_subnegotiation {
+                    self.state = TelnetParserState::Subnegotiation;
+                    if self.sb.len() < 1023 {
+                        self.sb.push(IAC);
+                    }
+                } else {
+                    self.state = TelnetParserState::Data;
+                }
+                None
             }
             _ => {
                 self.state = if in_subnegotiation {
@@ -317,10 +323,6 @@ impl TelnetNegotiation {
                 if self.handle_subnegotiation(&bytes) {
                     step.extend_deadline = true;
                 }
-            }
-            TelnetEvent::EndNegotiation => {
-                self.got_ttype = true;
-                self.got_naws = true;
             }
         }
 
@@ -493,6 +495,19 @@ mod tests {
     }
 
     #[test]
+    fn parser_ignores_escaped_iac_data() {
+        assert_eq!(parser_events(&[IAC, IAC]), Vec::<TelnetEvent>::new());
+    }
+
+    #[test]
+    fn parser_keeps_escaped_iac_inside_subnegotiation() {
+        assert_eq!(
+            parser_events(&[IAC, SB, TTYPE, 0, b'x', IAC, IAC, b'y', IAC, SE]),
+            vec![TelnetEvent::Subnegotiation(vec![TTYPE, 0, b'x', IAC, b'y'])]
+        );
+    }
+
+    #[test]
     fn initial_output_advertises_supported_options() {
         let mut negotiation = TelnetNegotiation::new();
         let output = negotiation.initial_output();
@@ -535,16 +550,6 @@ mod tests {
 
         assert!(step.extend_deadline);
         assert_eq!(negotiation.info.size, Some(TerminalSize::new(80, 24)));
-        assert!(negotiation.is_complete());
-    }
-
-    #[test]
-    fn end_negotiation_marks_negotiation_complete() {
-        let mut negotiation = TelnetNegotiation::new();
-
-        let step = negotiation.handle_event(TelnetEvent::EndNegotiation);
-
-        assert_eq!(step, NegotiationStep::default());
         assert!(negotiation.is_complete());
     }
 

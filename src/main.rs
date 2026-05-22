@@ -12,6 +12,7 @@ use runtime::TerminalSession;
 use std::env;
 use std::io::{self, Write};
 use std::process::ExitCode;
+use std::time::Duration;
 use telnet::negotiate_telnet;
 use terminal::{TerminalType, detect_terminal_type, terminal_size};
 
@@ -32,7 +33,7 @@ fn main() -> ExitCode {
     };
 
     if config.benchmark {
-        config.delay_ms = 0;
+        config.delay = Duration::ZERO;
         let _ = writeln!(
             io::stderr(),
             "\x1b[1;33mWARNING:\x1b[0m Benchmark mode enabled. Delay set to 0ms; use --frames for a completion report."

@@ -49,7 +49,23 @@
 - render 或 terminal-output 變更可以清楚說明「哪些輸出變了，為什麼合理」。
 - release check 能抓到 help / CLI / benchmark / smoke output 的明顯漂移。
 
-### 3. Performance Discipline
+### 3. Modern Rust Hardening
+
+目標不是「為了 Rust 而 Rust」，而是務實地處理 C-era 玩具程式常見的 trade off：magic number、sentinel state、raw byte protocol、process-global state、以及靠人工紀律維持的不變條件。每次改動都要能說明它讓程式更安全、更快、或更容易驗證。
+
+- 優先消滅 internal sentinel：用 `Option`、`NonZero*`、newtype、enum 表達狀態，而不是讓 `0`、`-1`、裸整數跨模組傳遞語意。
+- 將 public CLI 相容需求限制在 CLI 邊界內；進入 render/runtime/telnet 後應該是已驗證、型別化的設定。
+- 將 telnet command / option 從裸 `u8` 逐步收斂成 typed domain，保留未知 option 的 pass-through 能力。
+- 強化 Unix FFI 邊界：優先補上 EINTR/error handling 與更清楚的 safe wrapper；若可攜性收益明確，再評估 `libc` / `sigaction` / `signal-hook`。
+- 將 render hot path 的改動建立在 benchmark 上；型別化不得引入 per-cell allocation、dynamic dispatch、或高頻 format work。
+
+完成標準：
+
+- 重要 invariants 由型別或建構函式保證，而不是只靠註解或呼叫端紀律。
+- legacy compatibility 只留在 parsing/adaptation 層，核心模組不直接依賴 legacy sentinel。
+- 每個 safety/refactor commit 都能通過 release gate；效能相關 commit 需重跑 benchmark matrix。
+
+### 4. Performance Discipline
 
 效能優化要建立在可重跑 benchmark 和明確瓶頸上。
 
@@ -63,7 +79,7 @@
 - 每個 performance commit 都能附上「變更前 / 變更後」benchmark。
 - 若效能沒有明顯改善，保留可讀性收益時才接受。
 
-### 4. Module Elegance
+### 5. Module Elegance
 
 目標不是把檔案切碎，而是讓每個模組的責任更明確。
 
@@ -78,7 +94,7 @@
 - public behavior 和 smoke byte count 沒有非預期變化。
 - hot path 不因為拆分而變慢。
 
-### 5. Packaging And Distribution
+### 6. Packaging And Distribution
 
 這部分會把終端玩具推向正式軟體發行品質。
 

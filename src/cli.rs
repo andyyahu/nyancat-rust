@@ -1,5 +1,7 @@
 use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH};
 use std::fmt;
+use std::num::NonZeroU32;
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct CropBounds {
@@ -49,16 +51,29 @@ impl AxisCrop {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct FrameLimit(NonZeroU32);
+
+impl FrameLimit {
+    pub(crate) fn new(frames: u32) -> Option<Self> {
+        NonZeroU32::new(frames).map(Self)
+    }
+
+    pub(crate) const fn get(self) -> u32 {
+        self.0.get()
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Config {
     pub(crate) telnet: bool,
     pub(crate) show_counter: bool,
-    pub(crate) frame_count: u32,
+    pub(crate) frame_limit: Option<FrameLimit>,
     pub(crate) clear_screen: bool,
     pub(crate) set_title: bool,
     pub(crate) show_intro: bool,
     pub(crate) skip_intro: bool,
-    pub(crate) delay_ms: u64,
+    pub(crate) delay: Duration,
     pub(crate) benchmark: bool,
     pub(crate) truecolor: bool,
     pub(crate) crop: CropBounds,
@@ -75,9 +90,17 @@ pub(crate) enum CliError {
     MissingValue {
         option: String,
     },
+    UnexpectedValue {
+        option: String,
+        value: String,
+    },
     InvalidValue {
         option: String,
         value: String,
+    },
+    NonPositiveValue {
+        option: String,
+        value: i32,
     },
     ValueOutOfRange {
         option: String,
@@ -94,8 +117,14 @@ impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MissingValue { option } => write!(f, "missing value for {option}"),
+            Self::UnexpectedValue { option, value } => {
+                write!(f, "unexpected value for {option}: {value}")
+            }
             Self::InvalidValue { option, value } => {
                 write!(f, "invalid value for {option}: {value}")
+            }
+            Self::NonPositiveValue { option, value } => {
+                write!(f, "value for {option} must be positive: {value}")
             }
             Self::ValueOutOfRange {
                 option,
@@ -118,12 +147,12 @@ impl Default for Config {
         Self {
             telnet: false,
             show_counter: true,
-            frame_count: 0,
+            frame_limit: None,
             clear_screen: true,
             set_title: true,
             show_intro: false,
             skip_intro: false,
-            delay_ms: 90,
+            delay: Duration::from_millis(90),
             benchmark: false,
             truecolor: false,
             crop: CropBounds::default(),
@@ -264,7 +293,7 @@ const OPTION_SPECS: &[OptionSpec] = &[
         'f',
         "frames",
         "frames",
-        "Display the requested number of frames, then quit.",
+        "Display the requested positive number of frames, then quit.",
     ),
     OptionSpec::value(
         OptionId::MinRows,
@@ -344,8 +373,8 @@ pub(crate) fn parse_args(args: &[String]) -> Result<CliAction, CliError> {
                 });
             };
 
+            let option = format!("--{name}");
             if spec.takes_value() {
-                let option = format!("--{name}");
                 let value = match value {
                     Some(value) => value,
                     None => {
@@ -356,10 +385,13 @@ pub(crate) fn parse_args(args: &[String]) -> Result<CliAction, CliError> {
                     }
                 };
                 apply_value_option(&mut config, spec, &option, &value)?;
-            } else if let Some(action) =
-                apply_flag(&mut config, spec, &format!("--{name}"), &program)?
-            {
-                return Ok(action);
+            } else {
+                if let Some(value) = value {
+                    return Err(CliError::UnexpectedValue { option, value });
+                }
+                if let Some(action) = apply_flag(&mut config, spec, &option, &program)? {
+                    return Ok(action);
+                }
             }
         } else if arg.starts_with('-') && arg.len() > 1 {
             let bytes = arg.as_bytes();
@@ -450,9 +482,17 @@ fn apply_value_option(
                     max: 1000,
                 });
             }
-            config.delay_ms = parsed as u64;
+            config.delay = Duration::from_millis(parsed as u64);
         }
-        OptionId::Frames => config.frame_count = parsed.max(0) as u32,
+        OptionId::Frames => {
+            if parsed <= 0 {
+                return Err(CliError::NonPositiveValue {
+                    option: option.to_string(),
+                    value: parsed,
+                });
+            }
+            config.frame_limit = FrameLimit::new(parsed as u32);
+        }
         OptionId::MinRows => config.crop.rows.set_min(parsed),
         OptionId::MaxRows => config.crop.rows.set_max(parsed),
         OptionId::MinCols => config.crop.cols.set_min(parsed),
@@ -583,8 +623,8 @@ mod tests {
         assert!(!config.show_counter);
         assert!(!config.set_title);
         assert!(!config.clear_screen);
-        assert_eq!(config.delay_ms, 120);
-        assert_eq!(config.frame_count, 3);
+        assert_eq!(config.delay, Duration::from_millis(120));
+        assert_eq!(config.frame_limit.map(FrameLimit::get), Some(3));
         assert!(config.skip_intro);
         assert_eq!(config.crop.cols.as_pair(), (12, 52));
         assert_eq!(config.crop.rows.as_pair(), (20, 44));
@@ -633,6 +673,42 @@ mod tests {
             parse_args(&args),
             Err(CliError::MissingValue {
                 option: "-d".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn flag_options_reject_inline_values() {
+        let args = vec!["nyancat".to_string(), "--no-counter=false".to_string()];
+
+        assert_eq!(
+            parse_args(&args),
+            Err(CliError::UnexpectedValue {
+                option: "--no-counter".to_string(),
+                value: "false".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn frame_count_must_be_positive_when_provided() {
+        let args = vec!["nyancat".to_string(), "--frames=-1".to_string()];
+
+        assert_eq!(
+            parse_args(&args),
+            Err(CliError::NonPositiveValue {
+                option: "--frames".to_string(),
+                value: -1
+            })
+        );
+
+        let args = vec!["nyancat".to_string(), "-f0".to_string()];
+
+        assert_eq!(
+            parse_args(&args),
+            Err(CliError::NonPositiveValue {
+                option: "-f".to_string(),
+                value: 0
             })
         );
     }
