@@ -126,6 +126,7 @@ nyancat -T
 | `-W` | `--width` | Set animation width |
 | `-H` | `--height` | Set animation height |
 | `-h` | `--help` | Show help message |
+| `-V` | `--version` | Show version information |
 
 ## 🔧 Development
 

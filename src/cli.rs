@@ -47,9 +47,14 @@ pub(crate) enum AxisCrop {
 
 impl AxisCrop {
     fn centered(frame_size: i32, size: i32) -> Self {
+        // Compute in i64 so large --width/--height values cannot overflow the
+        // i32 sum/difference. Release builds have no overflow checks and would
+        // otherwise wrap silently into garbage crop bounds.
+        let frame_size = i64::from(frame_size);
+        let size = i64::from(size);
         Self::Fixed(AxisRange::new(
-            (frame_size - size) / 2,
-            (frame_size + size) / 2,
+            ((frame_size - size) / 2) as i32,
+            ((frame_size + size) / 2) as i32,
         ))
     }
 
@@ -128,6 +133,7 @@ pub(crate) struct Config {
 pub(crate) enum CliAction {
     Run(Config),
     Help { program: String },
+    Version,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -215,6 +221,7 @@ enum OptionId {
     Benchmark,
     TrueColor,
     Help,
+    Version,
     NoCounter,
     Delay,
     Frames,
@@ -326,6 +333,12 @@ const OPTION_SPECS: &[OptionSpec] = &[
         "Run in benchmark mode (0ms delay). Warning: high CPU usage.",
     ),
     OptionSpec::flag(OptionId::Help, 'h', "help", "Show this help message."),
+    OptionSpec::flag(
+        OptionId::Version,
+        'V',
+        "version",
+        "Show version information and exit.",
+    ),
     OptionSpec::value(
         OptionId::Delay,
         'd',
@@ -495,6 +508,7 @@ fn apply_flag(
                 program: program.to_string(),
             }));
         }
+        OptionId::Version => return Ok(Some(CliAction::Version)),
         OptionId::NoCounter => config.show_counter = false,
         _ => {
             return Err(CliError::UnknownOption {
@@ -542,8 +556,24 @@ fn apply_value_option(
         OptionId::MaxRows => config.crop.rows.set_max(parsed),
         OptionId::MinCols => config.crop.cols.set_min(parsed),
         OptionId::MaxCols => config.crop.cols.set_max(parsed),
-        OptionId::Width => config.crop.cols = AxisCrop::centered(FRAME_WIDTH as i32, parsed),
-        OptionId::Height => config.crop.rows = AxisCrop::centered(FRAME_HEIGHT as i32, parsed),
+        OptionId::Width => {
+            if parsed <= 0 {
+                return Err(CliError::NonPositiveValue {
+                    option: option.to_string(),
+                    value: parsed,
+                });
+            }
+            config.crop.cols = AxisCrop::centered(FRAME_WIDTH as i32, parsed);
+        }
+        OptionId::Height => {
+            if parsed <= 0 {
+                return Err(CliError::NonPositiveValue {
+                    option: option.to_string(),
+                    value: parsed,
+                });
+            }
+            config.crop.rows = AxisCrop::centered(FRAME_HEIGHT as i32, parsed);
+        }
         _ => {
             return Err(CliError::UnknownOption {
                 option: option.to_string(),
@@ -575,6 +605,10 @@ pub(crate) fn print_usage(program: &str) {
     print!("{}", usage_text(program));
 }
 
+pub(crate) fn print_version() {
+    println!("nyancat {}", env!("CARGO_PKG_VERSION"));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -595,6 +629,26 @@ mod tests {
         assert_eq!(
             config.crop.rows.resolve(AxisRange::new(0, 0)).as_pair(),
             (20, 44)
+        );
+    }
+
+    #[test]
+    fn width_and_height_reject_non_positive_values() {
+        let mut config = Config::default();
+        assert_eq!(
+            apply_value_option(&mut config, value_spec('W'), "-W", "0"),
+            Err(CliError::NonPositiveValue {
+                option: "-W".to_string(),
+                value: 0,
+            })
+        );
+        // i32::MIN previously overflowed AxisCrop::centered.
+        assert_eq!(
+            apply_value_option(&mut config, value_spec('H'), "-H", "-2147483648"),
+            Err(CliError::NonPositiveValue {
+                option: "-H".to_string(),
+                value: -2147483648,
+            })
         );
     }
 
@@ -761,6 +815,18 @@ mod tests {
     }
 
     #[test]
+    fn version_is_returned_without_exiting() {
+        assert_eq!(
+            parse_args(&["nyancat".to_string(), "--version".to_string()]),
+            Ok(CliAction::Version)
+        );
+        assert_eq!(
+            parse_args(&["nyancat".to_string(), "-V".to_string()]),
+            Ok(CliAction::Version)
+        );
+    }
+
+    #[test]
     fn invalid_delay_is_reported() {
         let mut config = Config::default();
         let delay = value_spec('d');
@@ -841,5 +907,106 @@ mod tests {
                 option: "--wat".to_string()
             })
         );
+    }
+
+    struct Rng(u64);
+
+    impl Rng {
+        fn new(seed: u64) -> Self {
+            Self(seed | 1)
+        }
+
+        fn next_u64(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            self.0 = x;
+            x
+        }
+
+        fn below(&mut self, n: usize) -> usize {
+            (self.next_u64() % n as u64) as usize
+        }
+    }
+
+    // Adversarial coverage for the hand-rolled argument parser. Random argv,
+    // including malformed numbers, embedded '=', combined short flags, and
+    // arbitrary unicode, must never panic and must parse deterministically.
+    #[test]
+    fn parse_args_survives_adversarial_argv() {
+        let tokens: &[&str] = &[
+            "-i",
+            "-t",
+            "-T",
+            "-n",
+            "-s",
+            "-e",
+            "-b",
+            "-h",
+            "-V",
+            "--telnet",
+            "--truecolor",
+            "--help",
+            "--version",
+            "--no-counter",
+            "-d",
+            "--delay",
+            "-f",
+            "--frames",
+            "-r",
+            "-R",
+            "-c",
+            "-C",
+            "-W",
+            "-H",
+            "120",
+            "-1",
+            "0",
+            "=",
+            "==",
+            "--",
+            "-",
+            "---",
+            "",
+            "--delay=120",
+            "--frames=-1",
+            "--no-counter=false",
+            "-Tnse",
+            "-d120",
+            "-f3",
+            "--width=",
+            "-x",
+            "--unknown",
+            "💥",
+            "\u{0}",
+            "-é",
+            "--délai",
+            " ",
+            "\t",
+            "-2147483648",
+            "2147483648",
+            "--frames=999999999999999999999",
+        ];
+
+        let mut rng = Rng::new(0xDEAD_BEEF_1234_5678);
+        for _ in 0..10_000 {
+            let mut args = vec!["nyancat".to_string()];
+            let count = rng.below(6);
+            for _ in 0..count {
+                if rng.below(4) == 0 {
+                    let len = rng.below(6);
+                    let token: String = (0..len)
+                        .map(|_| char::from_u32(rng.below(0x0011_0000) as u32).unwrap_or('?'))
+                        .collect();
+                    args.push(token);
+                } else {
+                    args.push(tokens[rng.below(tokens.len())].to_string());
+                }
+            }
+
+            // Must not panic, and must be deterministic for identical input.
+            assert_eq!(parse_args(&args), parse_args(&args));
+        }
     }
 }

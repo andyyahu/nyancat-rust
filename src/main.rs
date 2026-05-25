@@ -6,7 +6,7 @@ mod sys;
 mod telnet;
 mod terminal;
 
-use cli::{CliAction, parse_args, print_usage};
+use cli::{CliAction, parse_args, print_usage, print_version};
 use render::{Palette, RenderState, RunOutcome, run};
 use runtime::TerminalSession;
 use std::env;
@@ -22,6 +22,10 @@ fn main() -> ExitCode {
         Ok(CliAction::Run(config)) => config,
         Ok(CliAction::Help { program }) => {
             print_usage(&program);
+            return ExitCode::SUCCESS;
+        }
+        Ok(CliAction::Version) => {
+            print_version();
             return ExitCode::SUCCESS;
         }
         Err(error) => {

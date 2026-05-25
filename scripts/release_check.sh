@@ -199,6 +199,7 @@ grep -F -- "-C, --max-cols <col>" "$help_out" > /dev/null
 grep -F -- "-W, --width <width>" "$help_out" > /dev/null
 grep -F -- "-H, --height <height>" "$help_out" > /dev/null
 grep -F -- "-h, --help" "$help_out" > /dev/null
+grep -F -- "-V, --version" "$help_out" > /dev/null
 
 # A genuine (non-broken-pipe) write failure must exit non-zero and report the error.
 # /dev/full always fails writes with ENOSPC; it only exists on Linux, so guard on it.
