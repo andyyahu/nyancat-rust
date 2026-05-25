@@ -317,9 +317,15 @@ impl TelnetParser {
     fn handle_iac(&mut self, byte: u8, in_subnegotiation: bool) -> Option<TelnetEvent> {
         let command = TelnetCommand::from_byte(byte);
         match command {
+            TelnetCommand::Se if in_subnegotiation => {
+                self.state = TelnetParserState::Data;
+                let bytes = self.sb.clone();
+                self.sb.clear();
+                Some(TelnetEvent::Subnegotiation(bytes))
+            }
             TelnetCommand::Se => {
                 self.state = TelnetParserState::Data;
-                Some(TelnetEvent::Subnegotiation(self.sb.clone()))
+                None
             }
             TelnetCommand::Nop => {
                 self.state = if in_subnegotiation {
@@ -656,6 +662,32 @@ mod tests {
                 80,
                 0,
                 24
+            ])]
+        );
+    }
+
+    #[test]
+    fn parser_ignores_subnegotiation_end_outside_subnegotiation() {
+        assert_eq!(
+            parser_events(&[IAC, command(TelnetCommand::Se)]),
+            Vec::<TelnetEvent>::new()
+        );
+        assert_eq!(
+            parser_events(&[
+                IAC,
+                command(TelnetCommand::Sb),
+                option(TelnetOption::TTYPE),
+                0,
+                b'x',
+                IAC,
+                command(TelnetCommand::Se),
+                IAC,
+                command(TelnetCommand::Se)
+            ]),
+            vec![TelnetEvent::Subnegotiation(vec![
+                option(TelnetOption::TTYPE),
+                0,
+                b'x'
             ])]
         );
     }
