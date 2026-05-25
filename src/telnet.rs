@@ -889,4 +889,95 @@ mod tests {
             &option_command(TelnetCommand::Do, TelnetOption::NAWS)
         ));
     }
+
+    struct Rng(u64);
+
+    impl Rng {
+        fn new(seed: u64) -> Self {
+            Self(seed | 1)
+        }
+
+        fn next_u64(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            self.0 = x;
+            x
+        }
+
+        fn next_byte(&mut self) -> u8 {
+            (self.next_u64() >> 24) as u8
+        }
+
+        fn below(&mut self, n: usize) -> usize {
+            (self.next_u64() % n as u64) as usize
+        }
+    }
+
+    // Adversarial coverage for the hand-rolled telnet parser. Until a nightly
+    // cargo-fuzz target exists, this in-tree generator runs inside the normal
+    // test gate. The parser must never panic, must keep the subnegotiation
+    // buffer bounded, must parse deterministically, and negotiation over finite
+    // input must always terminate.
+    #[test]
+    fn parser_survives_adversarial_input() {
+        let mut seeds: Vec<Vec<u8>> = Vec::new();
+
+        for byte in 0..=255u8 {
+            seeds.push(vec![byte]);
+            seeds.push(vec![IAC, byte]);
+            seeds.push(vec![IAC, command(TelnetCommand::Sb), byte]);
+        }
+
+        seeds.push(vec![IAC; 4096]);
+
+        let mut oversized = vec![
+            IAC,
+            command(TelnetCommand::Sb),
+            option(TelnetOption::TTYPE),
+            0,
+        ];
+        oversized.resize(oversized.len() + 8192, b'A');
+        seeds.push(oversized);
+
+        seeds.push(vec![
+            IAC,
+            command(TelnetCommand::Sb),
+            option(TelnetOption::NAWS),
+            0,
+            80,
+            IAC,
+            command(TelnetCommand::Se),
+        ]);
+
+        let mut rng = Rng::new(0x9E37_79B9_7F4A_7C15);
+        for _ in 0..5_000 {
+            let len = rng.below(64);
+            let mut bytes = Vec::with_capacity(len);
+            for _ in 0..len {
+                // Bias toward IAC so command/subnegotiation paths are exercised often.
+                bytes.push(if rng.below(3) == 0 {
+                    IAC
+                } else {
+                    rng.next_byte()
+                });
+            }
+            seeds.push(bytes);
+        }
+
+        for bytes in &seeds {
+            let mut parser = TelnetParser::new();
+            for &byte in bytes {
+                let _ = parser.push(byte);
+                assert!(parser.sb.len() <= 1023, "subnegotiation buffer overflowed");
+            }
+
+            let mut input = ScriptedByteSource::new(bytes.clone());
+            let mut output = Vec::new();
+            negotiate_telnet_with_source(&mut output, &mut input).unwrap();
+
+            assert_eq!(parser_events(bytes), parser_events(bytes));
+        }
+    }
 }
