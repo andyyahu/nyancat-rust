@@ -29,7 +29,7 @@ env TERM=xterm-256color target/release/nyancat --benchmark --frames 100000 --no-
 To run the standard benchmark matrix:
 
 ```bash
-scripts/benchmark_matrix.sh 100000
+scripts/benchmark_matrix.sh 100000 5
 ```
 
 Example report format:
@@ -143,7 +143,7 @@ cargo build --release
 
 ```bash
 scripts/release_check.sh
-scripts/benchmark_matrix.sh 100000
+scripts/benchmark_matrix.sh 100000 5
 ```
 
 ### Project structure

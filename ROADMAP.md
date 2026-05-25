@@ -85,7 +85,7 @@
 效能優化要建立在可重跑 benchmark 和明確瓶頸上。
 
 - 先 profile，再改 hot path。
-- 每次效能相關變更後更新或至少重跑 benchmark matrix。
+- 每次效能相關變更後更新或至少重跑 benchmark matrix；用多輪 median 結果降低單次 CPU governor / cache 抖動的影響。
 - 優先觀察 frame buffer reuse、palette lookup、newline conversion、counter formatting、stdout write pattern。
 - 避免為了抽象引入 per-cell allocation、dynamic dispatch、或高頻 format work。
 

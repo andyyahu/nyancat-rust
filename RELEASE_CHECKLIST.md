@@ -92,7 +92,7 @@ When performance changes are intentional, refresh the benchmark snapshot in this
 Recommended commands:
 
 ```bash
-scripts/benchmark_matrix.sh 100000
+scripts/benchmark_matrix.sh 100000 5
 ```
 
 Record:
@@ -103,13 +103,14 @@ Record:
 - CPU model and topology
 - Build profile
 - Output destination
+- Runs per mode
 - Full benchmark reports
 
 ### Current Snapshot
 
 Benchmark snapshots are local measurements, not portable guarantees. Hardware, CPU governor, kernel, Rust version, terminal mode, build profile, and output destination can all change the numbers.
 
-For comparable render-throughput measurements, build in release mode and redirect stdout to `/dev/null`.
+For comparable render-throughput measurements, build in release mode and redirect stdout to `/dev/null`. `scripts/benchmark_matrix.sh` runs each mode multiple times, verifies deterministic byte stats, and reports the sample with median elapsed time.
 
 #### 2026-05-25
 
@@ -121,8 +122,9 @@ For comparable render-throughput measurements, build in release mode and redirec
 - Build: `cargo build --release`
 - Output: stdout redirected to `/dev/null`
 - Frames: 100,000
+- Runs per mode: 1
 
-| Mode | Command suffix | Elapsed | FPS | Bytes | Avg frame bytes | Max frame bytes | Throughput |
+| Mode | Command suffix | Median elapsed | Median FPS | Bytes | Avg frame bytes | Max frame bytes | Median throughput |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Xterm 256-color | `env TERM=xterm-256color ... --benchmark --frames 100000 --no-title --no-clear --no-counter` | 0.339324s | 294,703.91 | 401,883,158 | 4,018.83 | 4,152 | 1,129.50 MiB/s |
 | TrueColor | `env TERM=xterm-256color ... --benchmark --truecolor --frames 100000 --no-title --no-clear --no-counter` | 0.289067s | 345,940.17 | 520,949,705 | 5,209.50 | 5,424 | 1,718.69 MiB/s |
