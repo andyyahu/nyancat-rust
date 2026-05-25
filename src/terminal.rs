@@ -1,6 +1,8 @@
 use crate::sys;
 use std::num::NonZeroU16;
 
+const MAX_TERMINAL_DIMENSION: u16 = 10_000;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum TerminalType {
     Xterm256,
@@ -21,6 +23,14 @@ pub(crate) struct TerminalSize {
 
 impl TerminalSize {
     pub(crate) const fn new(width: u16, height: u16) -> Self {
+        if width == 0
+            || height == 0
+            || width > MAX_TERMINAL_DIMENSION
+            || height > MAX_TERMINAL_DIMENSION
+        {
+            panic!("terminal dimensions must be between 1 and 10000");
+        }
+
         let (Some(width), Some(height)) = (NonZeroU16::new(width), NonZeroU16::new(height)) else {
             panic!("terminal dimensions must be non-zero");
         };
@@ -29,17 +39,23 @@ impl TerminalSize {
     }
 
     pub(crate) fn try_new(width: i32, height: i32) -> Option<Self> {
-        let width = u16::try_from(width).ok().and_then(NonZeroU16::new)?;
-        let height = u16::try_from(height).ok().and_then(NonZeroU16::new)?;
+        let width = u16::try_from(width).ok()?;
+        let height = u16::try_from(height).ok()?;
+        if width == 0
+            || height == 0
+            || width > MAX_TERMINAL_DIMENSION
+            || height > MAX_TERMINAL_DIMENSION
+        {
+            return None;
+        }
+        let width = NonZeroU16::new(width)?;
+        let height = NonZeroU16::new(height)?;
 
         Some(Self { width, height })
     }
 
     pub(crate) fn with_width(self, width: u16) -> Self {
-        Self {
-            width: NonZeroU16::new(width).expect("terminal width must be non-zero"),
-            ..self
-        }
+        Self::new(width, self.height.get())
     }
 
     pub(crate) const fn width(self) -> i32 {
@@ -168,5 +184,17 @@ mod tests {
         );
         assert_eq!(TerminalSize::try_new(0, 24), None);
         assert_eq!(TerminalSize::try_new(80, -1), None);
+        assert_eq!(
+            TerminalSize::try_new(MAX_TERMINAL_DIMENSION as i32, MAX_TERMINAL_DIMENSION as i32),
+            Some(TerminalSize::new(
+                MAX_TERMINAL_DIMENSION,
+                MAX_TERMINAL_DIMENSION
+            ))
+        );
+        assert_eq!(
+            TerminalSize::try_new(MAX_TERMINAL_DIMENSION as i32 + 1, 24),
+            None
+        );
+        assert_eq!(TerminalSize::try_new(80, i32::MAX), None);
     }
 }
