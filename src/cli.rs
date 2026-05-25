@@ -643,6 +643,38 @@ mod tests {
     }
 
     #[test]
+    fn public_docs_list_every_option_spec() {
+        let readme = include_str!("../README.md");
+        let manpage = include_str!("../nyancat.1");
+
+        for spec in OPTION_SPECS {
+            let short = format!("-{}", spec.short);
+            let long = format!("--{}", spec.long);
+
+            assert!(
+                readme.contains(&format!("`{short}`")),
+                "README missing {short}"
+            );
+            assert!(
+                readme.contains(&format!("`{long}`")),
+                "README missing {long}"
+            );
+            assert!(
+                manpage.contains(&roff_escape_option(&short)),
+                "manpage missing {short}"
+            );
+            assert!(
+                manpage.contains(&roff_escape_option(&long)),
+                "manpage missing {long}"
+            );
+        }
+    }
+
+    fn roff_escape_option(option: &str) -> String {
+        option.replace('-', "\\-")
+    }
+
+    #[test]
     fn default_crop_is_automatic() {
         let config = Config::default();
 

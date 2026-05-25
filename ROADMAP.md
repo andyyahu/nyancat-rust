@@ -98,7 +98,7 @@
 
 目標不是把檔案切碎，而是讓每個模組的責任更明確。
 
-- `cli.rs` 已有 `OPTION_SPECS`，後續可考慮讓 README / manpage 的 option table 也由同一份資料生成。
+- `cli.rs` 已有 `OPTION_SPECS`，目前用測試防止 README / manpage option drift；後續若文件格式穩定，可再考慮由同一份資料生成 option table。
 - `render.rs` 已拆出 `palette`、`frame_buffer`、`render_loop`、`benchmark` 這些自然邊界；後續只有在 `Renderer` / `RenderState` 長出新責任時再繼續拆。
 - `telnet.rs` 目前可測性已足夠，除非新增協定行為，否則不急著拆。
 - app-level error enum 仍是條件式保留項，只有錯誤語意跨模組變複雜時才做。

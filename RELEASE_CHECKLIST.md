@@ -22,7 +22,7 @@ scripts/release_check.sh
 The script covers:
 
 - `cargo fmt --check`
-- `cargo test --locked`
+- `cargo test --locked`, including CLI option coverage for `README.md` and `nyancat.1`
 - `cargo clippy --locked --all-targets --all-features -- -D warnings`
 - `cargo build --release --locked`
 - `sh -n` syntax checks for release helper scripts
@@ -136,7 +136,7 @@ For comparable render-throughput measurements, build in release mode and redirec
 - Confirm `Cargo.lock` is committed.
 - Confirm `LICENSE` is present.
 - Confirm `Cargo.toml` has description, repository, homepage, readme, license, keywords, and categories metadata.
-- Confirm `nyancat.1` documents all public CLI options.
+- Confirm `nyancat.1` documents all public CLI options; `cargo test` also checks README/manpage option names against `OPTION_SPECS`.
 - Confirm `systemd/nyancat.socket` and `systemd/nyancat@.service` still reference the intended binary path and socket behavior.
 - Confirm `cargo package --list --locked` contains the expected user docs, release scripts, source files, manpage, and systemd files.
 - Confirm the package list excludes local-only files such as `.codex`, `.cargo/config.toml`, and GitHub Actions workflow metadata.
