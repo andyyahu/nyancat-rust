@@ -121,12 +121,12 @@ nyancat -T
 | `-b` | `--benchmark` | Run with 0ms delay (Warning: high CPU) |
 | `-d` | `--delay` | Set delay (10ms - 1000ms) |
 | `-f` | `--frames` | Quit after a positive number of frames |
-| `-r` | `--min-rows` | Crop the animation from the top |
-| `-R` | `--max-rows` | Crop the animation from the bottom |
-| `-c` | `--min-cols` | Crop the animation from the left |
-| `-C` | `--max-cols` | Crop the animation from the right |
-| `-W` | `--width` | Set animation width |
-| `-H` | `--height` | Set animation height |
+| `-r` | `--min-rows` | Crop the animation from the top (-10000 to 10000) |
+| `-R` | `--max-rows` | Crop the animation from the bottom (-10000 to 10000) |
+| `-c` | `--min-cols` | Crop the animation from the left (-10000 to 10000) |
+| `-C` | `--max-cols` | Crop the animation from the right (-10000 to 10000) |
+| `-W` | `--width` | Set animation width (1 to 10000) |
+| `-H` | `--height` | Set animation height (1 to 10000) |
 | `-h` | `--help` | Show help message |
 | `-V` | `--version` | Show version information |
 
