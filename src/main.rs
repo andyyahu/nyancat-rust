@@ -85,7 +85,7 @@ fn main() -> ExitCode {
                 ExitCode::SUCCESS
             } else {
                 run_error = Some(error);
-                ExitCode::SUCCESS
+                ExitCode::FAILURE
             }
         }
     };

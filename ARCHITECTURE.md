@@ -87,8 +87,8 @@ Use `io::Result` where the domain is already I/O-bound. Add an app-level error e
 Current process policy:
 
 - CLI errors print a stable user-facing message and exit failure.
-- Broken pipe is treated as successful termination.
-- Other runtime I/O errors print after terminal restore and currently exit success to preserve historical behavior.
+- Broken pipe is treated as successful termination (a downstream reader closing the pipe, e.g. `| head`, is normal).
+- Other runtime I/O errors print after terminal restore and exit failure, so callers and scripts can detect a genuine failure.
 
 ## Performance Policy
 
