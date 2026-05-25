@@ -28,9 +28,9 @@ The script covers:
 - `sh -n` syntax checks for release helper scripts
 - `cargo package --list --allow-dirty --locked`, including expected release files and excluding local-only dotfiles
 - `scripts/release_archive.sh` with a temporary dist directory, followed by archive content checks
-- Smoke tests, byte count and checksum checks, output marker checks, CLI error checks, and `--help` option coverage
+- Smoke tests with exact golden comparisons, output marker checks, CLI error checks, and `--help` option coverage
 
-GitHub Actions also runs the release check on stable Rust and a separate MSRV build/test job for Rust 1.85.0.
+GitHub Actions also runs the release check on stable Rust, a separate MSRV build/test job for Rust 1.85.0, and macOS test/build/smoke coverage against the committed goldens.
 
 If you need to run the steps manually, use the commands in the sections below.
 
@@ -58,6 +58,8 @@ When a render or output change is intentional, regenerate the goldens and review
 scripts/update_goldens.sh
 git diff --stat tests/golden/
 ```
+
+By default `scripts/update_goldens.sh` rebuilds `target/release/nyancat` first. Set `NYANCAT_BIN` only when you intentionally want to regenerate against a specific existing executable.
 
 For reference, the current golden sizes are 4002 (normal), 3067 (telnet), 5175 (truecolor), 4083 (crop), and 11916 (benchmark) bytes.
 
@@ -106,7 +108,7 @@ Record:
 
 Benchmark snapshots are local measurements, not portable guarantees. Hardware, CPU governor, kernel, Rust version, terminal mode, build profile, and output destination can all change the numbers.
 
-For comparable render-throughput measurements, build in release mode and redirect stdout to `/dev/null`. `scripts/benchmark_matrix.sh` runs each mode multiple times, verifies deterministic byte stats, and reports the sample with median elapsed time.
+For comparable render-throughput measurements, build in release mode and redirect stdout to `/dev/null`. `scripts/benchmark_matrix.sh` rebuilds the default release binary, runs each mode multiple times, verifies deterministic byte stats, and reports the sample with median elapsed time. Set `NYANCAT_BIN` only when benchmarking a specific existing executable.
 
 #### 2026-05-25
 

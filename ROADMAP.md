@@ -27,7 +27,7 @@
 - `RenderState`、`Renderer`、`render/` 子模組分離 frame bytes 生成、palette lookup、timing、buffer reuse、telnet newline 和 benchmark accounting。
 - telnet negotiation 拆成 parser、state machine、subnegotiation parser 和 `ByteSource`；command / option 已型別化，未知 option 仍以 raw byte newtype 保留並可測。
 - `TerminalSession` 用 RAII restore terminal；Unix FFI 和 signal path 集中在 `sys.rs` / `runtime.rs`，stdin poll/read 回傳 typed outcomes 而不是吞成 bool / `Option`。
-- release gate、output smoke byte/checksum checks、benchmark report、benchmark matrix 和 CI/MSRV job 已建立。
+- release gate、output smoke golden checks、benchmark report、benchmark matrix 和 CI/MSRV/macOS jobs 已建立。
 
 仍保留的條件式方向：
 
@@ -53,11 +53,11 @@
 
 ### 2. Output Regression Coverage
 
-目前 smoke test 已檢查 byte count、POSIX checksum 和關鍵輸出 marker。checksum 提供 deterministic output regression guard；局部 marker 則讓錯誤訊息能指出主要語意差異。
+目前 smoke test 已用 committed golden files 做 exact output comparison，並保留關鍵輸出 marker。golden comparison 提供 deterministic output regression guard；局部 marker 則讓錯誤訊息能指出主要語意差異。
 
-- 保留 byte count + checksum smoke，因為它便宜且能抓到完整輸出漂移。
+- 保留 golden smoke，因為它便宜且能抓到完整輸出漂移；golden 檔案本身包含 terminal output 的空白與控制碼，更新時必須 review diff。
 - 維護 release smoke 的關鍵 marker 檢查，覆蓋 xterm / truecolor / telnet newline / no-counter 行為。
-- 若未來 checksum 太脆弱，再改成小型 golden fixture 或更細的 semantic output verifier。
+- 若未來 golden fixture 太脆弱，再補更細的 semantic output verifier。
 
 完成標準：
 
@@ -107,15 +107,15 @@
 完成標準：
 
 - 拆分後測試覆蓋不下降。
-- public behavior 和 smoke byte count 沒有非預期變化。
+- public behavior 和 smoke golden output 沒有非預期變化。
 - hot path 不因為拆分而變慢。
 
 ### 6. Packaging And Distribution
 
 這部分會把終端玩具推向正式軟體發行品質。
 
-- `v*` tag 會觸發 `.github/workflows/release.yml`：linux job 先 checkout 對應 tag、跑 `scripts/release_check.sh` gate，再用 `scripts/release_archive.sh` 建 archive 並建立 GitHub Release；macOS job checkout 同一 tag 並上傳對應 archive。目前產出 x86_64-linux 與 arm64-macOS 兩個 artifact，更多 target（其他 arch / BSD）是後續 build matrix 延伸。
-- crates.io 發佈仍是「刻意延遲」的決策，不進自動化：需要先確認 crate 名稱所有權與發佈 token，且發佈是不可逆動作，應由維護者手動執行而非 CI 自動觸發。`Cargo.toml` metadata 已具備 description/repository/homepage/readme/license/keywords/categories,足以支援 GitHub Release 與未來的 crates.io。
+- `v*` tag 會觸發 `.github/workflows/release.yml`：linux job 先 checkout 對應 tag ref、跑 `scripts/release_check.sh` gate，再用 `scripts/release_archive.sh` 建 archive 並建立 GitHub Release；macOS job checkout 同一 tag ref 並上傳對應 archive。目前產出 Linux 與 macOS host-target artifact，更多 target（其他 arch / BSD）是後續 build matrix 延伸。
+- crates.io 發佈仍是「刻意延遲」的決策，不進自動化：需要先確認 crate 名稱所有權與發佈 token，且發佈是不可逆動作，應由維護者手動執行而非 CI 自動觸發。`Cargo.toml` metadata 已具備 description/repository/homepage/readme/license/keywords/categories，足以支援 GitHub Release 與未來的 crates.io。
 - 將 package manifest 檢查納入 release gate，避免發行檔案清單或 metadata 在最後一刻才出問題。
 - 確認 manpage、systemd service、README 安裝步驟一致。
 - 如果要改 default branch 名稱，先同步本機、GitHub default branch、README 文件。

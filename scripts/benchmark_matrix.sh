@@ -1,7 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-BIN=${NYANCAT_BIN:-target/release/nyancat}
 FRAMES=${1:-100000}
 RUNS=${2:-3}
 
@@ -33,8 +32,15 @@ TMP=${TMPDIR:-/tmp}
 results=$(mktemp "$TMP/nyancat-rust-benchmark.XXXXXX")
 trap 'rm -f "$results"' EXIT HUP INT TERM
 
-if [ ! -x "$BIN" ]; then
+if [ -z "${NYANCAT_BIN:-}" ]; then
     cargo build --release --locked
+    BIN=target/release/nyancat
+else
+    BIN=$NYANCAT_BIN
+    if [ ! -x "$BIN" ]; then
+        echo "NYANCAT_BIN is not executable: $BIN" >&2
+        exit 1
+    fi
 fi
 
 echo "# Benchmark Matrix"

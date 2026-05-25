@@ -32,6 +32,8 @@ To run the standard benchmark matrix:
 scripts/benchmark_matrix.sh 100000 5
 ```
 
+The matrix script rebuilds the default release binary before measuring; set `NYANCAT_BIN` only when comparing a specific existing executable.
+
 Example report format:
 
 ```text

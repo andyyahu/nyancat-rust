@@ -5,11 +5,17 @@ set -eu
 # compares against. Run this when a render/output change is intentional, then review
 # the resulting git diff under tests/golden/ to confirm the byte changes are expected.
 
-BIN=${NYANCAT_BIN:-target/release/nyancat}
 GOLDEN_DIR=${GOLDEN_DIR:-tests/golden}
 
-if [ ! -x "$BIN" ]; then
+if [ -z "${NYANCAT_BIN:-}" ]; then
     cargo build --release --locked
+    BIN=target/release/nyancat
+else
+    BIN=$NYANCAT_BIN
+    if [ ! -x "$BIN" ]; then
+        echo "NYANCAT_BIN is not executable: $BIN" >&2
+        exit 1
+    fi
 fi
 
 mkdir -p "$GOLDEN_DIR"

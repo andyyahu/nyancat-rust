@@ -114,7 +114,7 @@ The baseline for behavior changes is:
 - `cargo build --release`
 - Smoke paths from `RELEASE_CHECKLIST.md`
 
-For render or terminal-output changes, compare smoke output byte counts and inspect whether changed bytes are intentional.
+For render or terminal-output changes, compare smoke output against the committed goldens and inspect whether changed bytes are intentional.
 
 ## Extension Guidelines
 
