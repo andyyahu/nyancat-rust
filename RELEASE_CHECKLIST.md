@@ -113,7 +113,7 @@ For comparable render-throughput measurements, build in release mode and redirec
 
 #### 2026-05-25
 
-- Commit: `75d31fa`
+- Commit: `3cd207f`
 - Rust: `rustc 1.95.0 (59807616e 2026-04-14)`
 - OS: `Linux 7.0.10-1-cachyos x86_64 GNU/Linux`
 - CPU: `Intel(R) Core(TM) Ultra 9 185H`
@@ -124,9 +124,9 @@ For comparable render-throughput measurements, build in release mode and redirec
 
 | Mode | Command suffix | Elapsed | FPS | Bytes | Avg frame bytes | Max frame bytes | Throughput |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Xterm 256-color | `env TERM=xterm-256color ... --benchmark --frames 100000 --no-title --no-clear --no-counter` | 0.347999s | 287,357.07 | 401,883,158 | 4,018.83 | 4,152 | 1,101.34 MiB/s |
-| TrueColor | `env TERM=xterm-256color ... --benchmark --truecolor --frames 100000 --no-title --no-clear --no-counter` | 0.322087s | 310,474.81 | 520,949,705 | 5,209.50 | 5,424 | 1,542.49 MiB/s |
-| VT100 40x24 | `env TERM=vt100 ... --benchmark --frames 100000 --width 40 --height 24 --no-title --no-clear --no-counter` | 0.368884s | 271,088.16 | 308,616,555 | 3,086.17 | 3,170 | 797.87 MiB/s |
+| Xterm 256-color | `env TERM=xterm-256color ... --benchmark --frames 100000 --no-title --no-clear --no-counter` | 0.339324s | 294,703.91 | 401,883,158 | 4,018.83 | 4,152 | 1,129.50 MiB/s |
+| TrueColor | `env TERM=xterm-256color ... --benchmark --truecolor --frames 100000 --no-title --no-clear --no-counter` | 0.289067s | 345,940.17 | 520,949,705 | 5,209.50 | 5,424 | 1,718.69 MiB/s |
+| VT100 40x24 | `env TERM=vt100 ... --benchmark --frames 100000 --width 40 --height 24 --no-title --no-clear --no-counter` | 0.337797s | 296,036.03 | 308,616,555 | 3,086.17 | 3,170 | 871.29 MiB/s |
 
 ## Packaging Checks
 
