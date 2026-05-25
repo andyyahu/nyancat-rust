@@ -34,7 +34,7 @@ This document records the current module boundaries and the design constraints t
 | `telnet.rs` | Telnet parser, negotiation state, byte-source abstraction, and negotiated terminal metadata. |
 | `render.rs` | Palette construction, frame rendering, render loop timing, frame buffer output, and benchmark stats. |
 | `runtime.rs` | Terminal restore sequences, signal handlers, resize flag, and session RAII guard. |
-| `sys.rs` | Unix FFI declarations and safe wrappers for signals, poll/read/write, ioctl, and `_exit`. |
+| `sys.rs` | Unix FFI declarations and safe wrappers for signals, typed poll/read outcomes, write, ioctl, and `_exit`. |
 | `main.rs` | Process-level composition and exit-code decisions. |
 
 ## Data Flow

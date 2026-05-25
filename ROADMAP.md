@@ -26,7 +26,7 @@
 - terminal、palette、frame symbol、terminal size 改成語意型別，render hot path 保留 O(1) palette lookup。
 - `RenderState`、`Renderer`、`RenderLoop`、`FrameBuffer` 分離 frame bytes 生成、timing、buffer reuse、telnet newline 和 benchmark accounting。
 - telnet negotiation 拆成 parser、state machine、subnegotiation parser 和 `ByteSource`，可用 scripted input 測 response。
-- `TerminalSession` 用 RAII restore terminal；Unix FFI 和 signal path 集中在 `sys.rs` / `runtime.rs`。
+- `TerminalSession` 用 RAII restore terminal；Unix FFI 和 signal path 集中在 `sys.rs` / `runtime.rs`，stdin poll/read 回傳 typed outcomes 而不是吞成 bool / `Option`。
 - release gate、output smoke checks、benchmark report、benchmark matrix 和 CI/MSRV job 已建立。
 
 仍保留的條件式方向：

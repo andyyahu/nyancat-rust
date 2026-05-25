@@ -48,22 +48,28 @@ impl ByteSource for TimeoutReader {
             return Ok(Some(byte));
         }
 
-        let now = Instant::now();
-        if now >= deadline {
-            return Ok(None);
-        }
+        loop {
+            let now = Instant::now();
+            if now >= deadline {
+                return Ok(None);
+            }
 
-        let timeout = sys::PollTimeout::from_duration(deadline.saturating_duration_since(now));
+            let timeout = sys::PollTimeout::from_duration(deadline.saturating_duration_since(now));
 
-        if sys::stdin_ready(timeout) {
-            if let Some(bytes_read) = sys::read_stdin(&mut self.buffer)? {
-                self.head = 1;
-                self.tail = bytes_read;
-                return Ok(Some(self.buffer[0]));
+            match sys::stdin_readiness(timeout)? {
+                sys::PollReadiness::Ready => match sys::read_stdin(&mut self.buffer)? {
+                    sys::StdinRead::Bytes(bytes_read) => {
+                        self.head = 1;
+                        self.tail = bytes_read;
+                        return Ok(Some(self.buffer[0]));
+                    }
+                    sys::StdinRead::Eof => return Ok(None),
+                    sys::StdinRead::Interrupted => {}
+                },
+                sys::PollReadiness::Timeout => return Ok(None),
+                sys::PollReadiness::Interrupted => {}
             }
         }
-
-        Ok(None)
     }
 }
 

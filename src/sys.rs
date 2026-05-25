@@ -6,6 +6,9 @@ const SIGINT: i32 = 2;
 const SIGPIPE: i32 = 13;
 const SIGWINCH: i32 = 28;
 const POLLIN: i16 = 0x001;
+const POLLERR: i16 = 0x008;
+const POLLHUP: i16 = 0x010;
+const POLLNVAL: i16 = 0x020;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 const TIOCGWINSZ: usize = 0x5413;
@@ -21,6 +24,20 @@ const TIOCGWINSZ: usize = 0x5413;
 const TIOCGWINSZ: usize = 0x4008_7468;
 
 pub type SignalHandler = extern "C" fn(i32);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PollReadiness {
+    Ready,
+    Timeout,
+    Interrupted,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StdinRead {
+    Bytes(usize),
+    Eof,
+    Interrupted,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Signal {
@@ -110,7 +127,7 @@ pub fn stdin_terminal_size() -> Option<(i32, i32)> {
     }
 }
 
-pub fn stdin_ready(timeout: PollTimeout) -> bool {
+pub fn stdin_readiness(timeout: PollTimeout) -> io::Result<PollReadiness> {
     let mut fds = PollFd {
         fd: Fd::STDIN.as_raw(),
         events: POLLIN,
@@ -118,19 +135,40 @@ pub fn stdin_ready(timeout: PollTimeout) -> bool {
     };
 
     let rc = unsafe { poll(&mut fds, 1, timeout.as_raw()) };
-    rc > 0 && (fds.revents & POLLIN) != 0
-}
-
-pub fn read_stdin(buffer: &mut [u8]) -> io::Result<Option<usize>> {
-    let bytes_read = unsafe { read(Fd::STDIN.as_raw(), buffer.as_mut_ptr().cast(), buffer.len()) };
-    if bytes_read > 0 {
-        Ok(Some(bytes_read as usize))
-    } else if bytes_read == 0 {
-        Ok(None)
+    if rc > 0 {
+        if (fds.revents & POLLNVAL) != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "stdin is not a valid poll fd",
+            ));
+        }
+        if (fds.revents & (POLLIN | POLLHUP | POLLERR)) != 0 {
+            Ok(PollReadiness::Ready)
+        } else {
+            Ok(PollReadiness::Timeout)
+        }
+    } else if rc == 0 {
+        Ok(PollReadiness::Timeout)
     } else {
         let err = io::Error::last_os_error();
         if err.kind() == io::ErrorKind::Interrupted {
-            Ok(None)
+            Ok(PollReadiness::Interrupted)
+        } else {
+            Err(err)
+        }
+    }
+}
+
+pub fn read_stdin(buffer: &mut [u8]) -> io::Result<StdinRead> {
+    let bytes_read = unsafe { read(Fd::STDIN.as_raw(), buffer.as_mut_ptr().cast(), buffer.len()) };
+    if bytes_read > 0 {
+        Ok(StdinRead::Bytes(bytes_read as usize))
+    } else if bytes_read == 0 {
+        Ok(StdinRead::Eof)
+    } else {
+        let err = io::Error::last_os_error();
+        if err.kind() == io::ErrorKind::Interrupted {
+            Ok(StdinRead::Interrupted)
         } else {
             Err(err)
         }
