@@ -26,7 +26,7 @@ impl FrameSymbol {
     pub(crate) const BLUSH: Self = Self::from_byte(b'%');
 
     #[inline]
-    const fn from_byte(byte: u8) -> Self {
+    pub(crate) const fn from_byte(byte: u8) -> Self {
         match NonZeroU8::new(byte) {
             Some(value) => Self(value),
             None => panic!("frame symbol byte must be non-zero"),
@@ -875,8 +875,8 @@ pub(crate) fn frame_count() -> usize {
 }
 
 #[inline]
-pub(crate) fn frame_symbol(frame_index: usize, row: usize, col: usize) -> FrameSymbol {
-    FrameSymbol::from_byte(FRAMES[frame_index][row].as_bytes()[col])
+pub(crate) fn frame_row(frame_index: usize, row: usize) -> &'static [u8] {
+    FRAMES[frame_index][row].as_bytes()
 }
 
 #[cfg(test)]

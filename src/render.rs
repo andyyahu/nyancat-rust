@@ -3,7 +3,7 @@ mod frame_buffer;
 mod palette;
 mod render_loop;
 
-use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FrameSymbol, frame_symbol};
+use crate::animation::{FRAME_HEIGHT, FRAME_WIDTH, FrameSymbol, frame_row};
 use crate::cli::{AxisCrop, AxisRange, Config};
 use crate::runtime::take_resize_pending;
 use crate::terminal::{TerminalSize, terminal_size};
@@ -15,6 +15,10 @@ use render_loop::RenderLoop;
 use std::io::{self, Write};
 use std::thread;
 use std::time::{Duration, Instant};
+
+// Vertical band (frame rows 24..=42) where the off-screen rainbow tail is drawn.
+const RAINBOW_BAND_TOP: i32 = 23;
+const RAINBOW_BAND_BOTTOM: i32 = 43;
 
 pub(crate) struct RenderState {
     terminal_size: TerminalSize,
@@ -118,8 +122,14 @@ impl<'a> Renderer<'a> {
         let mut run = 0usize;
 
         for y in state.min_row..state.max_row {
+            // Row-invariant work hoisted out of the per-cell path: whether this
+            // row is in the rainbow band, and its in-frame byte slice (one frame
+            // lookup + bounds check per row instead of per cell).
+            let in_band = y > RAINBOW_BAND_TOP && y < RAINBOW_BAND_BOTTOM;
+            let row = Self::row_for(frame_index, y);
+
             for x in state.min_col..state.max_col {
-                let color = Self::symbol_at(frame_index, y, x);
+                let color = Self::cell_color(frame_index, in_band, row, y, x);
                 if last != Some(color) {
                     // Flush the finished run of identical cells in one fill, then
                     // emit the new color's escape once (cells coalesce into runs,
@@ -147,16 +157,55 @@ impl<'a> Renderer<'a> {
 
     fn render_ascii_frame(&self, out: &mut FrameBuffer, state: &RenderState, frame_index: usize) {
         for y in state.min_row..state.max_row {
+            let in_band = y > RAINBOW_BAND_TOP && y < RAINBOW_BAND_BOTTOM;
+            let row = Self::row_for(frame_index, y);
+
             for x in state.min_col..state.max_col {
-                let color = Self::symbol_at(frame_index, y, x);
+                let color = Self::cell_color(frame_index, in_band, row, y, x);
                 out.push_bytes(self.palette.color(color));
             }
             out.push_newlines(self.config.telnet, 1);
         }
     }
 
+    /// The in-frame byte row for `y`, or `None` when `y` falls outside the frame.
     #[inline]
-    fn symbol_at(frame_index: usize, y: i32, x: i32) -> FrameSymbol {
+    fn row_for(frame_index: usize, y: i32) -> Option<&'static [u8]> {
+        if (0..FRAME_HEIGHT as i32).contains(&y) {
+            Some(frame_row(frame_index, y as usize))
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn cell_color(
+        frame_index: usize,
+        in_band: bool,
+        row: Option<&[u8]>,
+        y: i32,
+        x: i32,
+    ) -> FrameSymbol {
+        if x < 0 {
+            if in_band {
+                Self::rainbow(frame_index, y, x)
+            } else {
+                FrameSymbol::BACKGROUND
+            }
+        } else if let Some(row) = row {
+            // x >= FRAME_WIDTH falls off the slice and reads as background.
+            row.get(x as usize)
+                .map_or(FrameSymbol::BACKGROUND, |&byte| {
+                    FrameSymbol::from_byte(byte)
+                })
+        } else {
+            FrameSymbol::BACKGROUND
+        }
+    }
+
+    // Off-screen rainbow tail: a two-phase square wave that flips every couple of
+    // frames. Cold path (only x < 0 in the band), so kept out of the hot loop.
+    fn rainbow(frame_index: usize, y: i32, x: i32) -> FrameSymbol {
         const RAINBOW: &[FrameSymbol] = &[
             FrameSymbol::BACKGROUND,
             FrameSymbol::BACKGROUND,
@@ -179,30 +228,18 @@ impl<'a> Renderer<'a> {
             FrameSymbol::BACKGROUND,
             FrameSymbol::BACKGROUND,
         ];
-
-        // The rainbow tail occupies the cat's body band (rows 24..=42) in the
-        // off-screen columns to the left (x < 0), drawn as a two-phase square
-        // wave whose phase flips every couple of frames.
-        const BAND_TOP: i32 = 23;
-        const BAND_BOTTOM: i32 = 43;
         const STRIPE_PERIOD: i32 = 16;
         const STRIPE_HALF: i32 = 8;
 
-        if y > BAND_TOP && y < BAND_BOTTOM && x < 0 {
-            let mut mod_x = ((-x + 2) % STRIPE_PERIOD) / STRIPE_HALF;
-            if (frame_index / 2) % 2 == 1 {
-                mod_x = 1 - mod_x;
-            }
-            let index = (mod_x + y - BAND_TOP) as usize;
-            RAINBOW
-                .get(index)
-                .copied()
-                .unwrap_or(FrameSymbol::BACKGROUND)
-        } else if !(0..FRAME_HEIGHT as i32).contains(&y) || !(0..FRAME_WIDTH as i32).contains(&x) {
-            FrameSymbol::BACKGROUND
-        } else {
-            frame_symbol(frame_index, y as usize, x as usize)
+        let mut mod_x = ((-x + 2) % STRIPE_PERIOD) / STRIPE_HALF;
+        if (frame_index / 2) % 2 == 1 {
+            mod_x = 1 - mod_x;
         }
+        let index = (mod_x + y - RAINBOW_BAND_TOP) as usize;
+        RAINBOW
+            .get(index)
+            .copied()
+            .unwrap_or(FrameSymbol::BACKGROUND)
     }
 
     fn render_counter(&self, out: &mut FrameBuffer, state: &RenderState, elapsed_seconds: u64) {
