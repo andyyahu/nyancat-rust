@@ -136,7 +136,7 @@ For comparable render-throughput measurements, build in release mode and redirec
 - Confirm the repository does not track `.cargo/config.toml`; release archives must not be compiled with local `target-cpu=native` rustflags.
 - Confirm `nyancat.1` documents all public CLI options; `cargo test` also checks README/manpage option names against `OPTION_SPECS`.
 - Confirm `systemd/nyancat.socket` and `systemd/nyancat@.service` still reference the intended binary path and socket behavior.
-- Confirm `cargo package --list --locked` contains the expected user docs, release scripts, source files, manpage, and systemd files.
+- Confirm `cargo package --list --locked` contains the expected user docs, release scripts, golden smoke fixtures, source files, manpage, and systemd files.
 - Confirm the package list excludes local-only files such as `.codex`, `.cargo/config.toml`, and GitHub Actions workflow metadata.
 - Confirm release artifacts are built from a clean checkout or a clean working tree; `scripts/release_check.sh` builds a temporary archive and verifies its contents.
 
