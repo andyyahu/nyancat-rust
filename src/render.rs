@@ -115,17 +115,27 @@ impl<'a> Renderer<'a> {
         output: &'static [u8],
     ) {
         let mut last: Option<FrameSymbol> = None;
+        let mut run = 0usize;
 
         for y in state.min_row..state.max_row {
             for x in state.min_col..state.max_col {
                 let color = Self::symbol_at(frame_index, y, x);
-                let escape = self.palette.color(color);
-                if last != Some(color) && !escape.is_empty() {
+                if last != Some(color) {
+                    // Flush the finished run of identical cells in one fill, then
+                    // emit the new color's escape once (cells coalesce into runs,
+                    // so the per-cell output becomes a per-run memset).
+                    out.push_repeated(output, run);
+                    run = 0;
+                    let escape = self.palette.color(color);
+                    if !escape.is_empty() {
+                        out.push_bytes(escape);
+                    }
                     last = Some(color);
-                    out.push_bytes(escape);
                 }
-                out.push_bytes(output);
+                run += 1;
             }
+            out.push_repeated(output, run);
+            run = 0;
             // Fill to the line end with the row's current background. An odd
             // terminal width leaves a one-column gap (cells are two chars wide),
             // which the counter's \x1b[J would otherwise fill on the last row
