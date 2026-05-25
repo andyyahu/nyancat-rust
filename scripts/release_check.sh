@@ -25,6 +25,20 @@ check_bytes() {
     fi
 }
 
+check_cksum() {
+    file=$1
+    expected_crc=$2
+    expected_bytes=$3
+    label=$4
+    set -- $(cksum "$file")
+    actual_crc=$1
+    actual_bytes=$2
+    if [ "$actual_crc" != "$expected_crc" ] || [ "$actual_bytes" != "$expected_bytes" ]; then
+        echo "checksum mismatch for $label in $file: expected $expected_crc $expected_bytes, got $actual_crc $actual_bytes" >&2
+        exit 1
+    fi
+}
+
 check_contains() {
     file=$1
     pattern=$2
@@ -82,6 +96,12 @@ check_bytes "$telnet_out" 3067
 check_bytes "$truecolor_out" 5175
 check_bytes "$crop_out" 4083
 check_bytes "$benchmark_out" 11916
+
+check_cksum "$normal_out" 3491497212 4002 "normal output"
+check_cksum "$telnet_out" 3107447574 3067 "telnet output"
+check_cksum "$truecolor_out" 1251626052 5175 "truecolor output"
+check_cksum "$crop_out" 1400779159 4083 "crop output"
+check_cksum "$benchmark_out" 3251515113 11916 "benchmark output"
 
 esc=$(printf '\033')
 telnet_iac_wont_echo=$(printf '\377\374\001')

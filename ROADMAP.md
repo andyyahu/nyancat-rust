@@ -27,7 +27,7 @@
 - `RenderState`、`Renderer`、`RenderLoop`、`FrameBuffer` 分離 frame bytes 生成、timing、buffer reuse、telnet newline 和 benchmark accounting。
 - telnet negotiation 拆成 parser、state machine、subnegotiation parser 和 `ByteSource`；command / option 已型別化，未知 option 仍以 raw byte newtype 保留並可測。
 - `TerminalSession` 用 RAII restore terminal；Unix FFI 和 signal path 集中在 `sys.rs` / `runtime.rs`，stdin poll/read 回傳 typed outcomes 而不是吞成 bool / `Option`。
-- release gate、output smoke checks、benchmark report、benchmark matrix 和 CI/MSRV job 已建立。
+- release gate、output smoke byte/checksum checks、benchmark report、benchmark matrix 和 CI/MSRV job 已建立。
 
 仍保留的條件式方向：
 
@@ -53,12 +53,11 @@
 
 ### 2. Output Regression Coverage
 
-目前 smoke test 已檢查 byte count 和關鍵輸出 marker，但 byte count 只能證明輸出大小，局部 marker 也不能完整指出所有語意差異。
+目前 smoke test 已檢查 byte count、POSIX checksum 和關鍵輸出 marker。checksum 提供 deterministic output regression guard；局部 marker 則讓錯誤訊息能指出主要語意差異。
 
-- 保留 byte count smoke，因為它便宜且能抓到大部分輸出漂移。
+- 保留 byte count + checksum smoke，因為它便宜且能抓到完整輸出漂移。
 - 維護 release smoke 的關鍵 marker 檢查，覆蓋 xterm / truecolor / telnet newline / no-counter 行為。
-- 考慮加入小型 golden output fixture，覆蓋 normal、truecolor、telnet newline、crop、benchmark report。
-- 若 golden fixture 太脆弱，至少把 smoke output 的關鍵 escape sequence 和 frame marker 做局部檢查。
+- 若未來 checksum 太脆弱，再改成小型 golden fixture 或更細的 semantic output verifier。
 
 完成標準：
 

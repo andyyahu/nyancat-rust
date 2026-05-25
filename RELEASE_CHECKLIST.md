@@ -25,7 +25,7 @@ The script covers:
 - `cargo test --locked`
 - `cargo clippy --locked --all-targets --all-features -- -D warnings`
 - `cargo build --release --locked`
-- Smoke tests, byte count checks, output marker checks, CLI error checks, and `--help` option coverage
+- Smoke tests, byte count and checksum checks, output marker checks, CLI error checks, and `--help` option coverage
 
 GitHub Actions also runs the release check on stable Rust and a separate MSRV build/test job for Rust 1.85.0.
 
@@ -52,6 +52,16 @@ Expected current byte counts:
  5175 /tmp/nyancat-rust-truecolor-smoke.out
  4083 /tmp/nyancat-rust-crop-smoke.out
 11916 /tmp/nyancat-rust-benchmark-smoke.out
+```
+
+Expected current POSIX `cksum` values:
+
+```text
+3491497212 4002 /tmp/nyancat-rust-smoke.out
+3107447574 3067 /tmp/nyancat-rust-telnet-smoke.out
+1251626052 5175 /tmp/nyancat-rust-truecolor-smoke.out
+1400779159 4083 /tmp/nyancat-rust-crop-smoke.out
+3251515113 11916 /tmp/nyancat-rust-benchmark-smoke.out
 ```
 
 The CLI error smoke must return a non-zero status and print:
