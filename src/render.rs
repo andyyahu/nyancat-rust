@@ -126,6 +126,11 @@ impl<'a> Renderer<'a> {
                 }
                 out.push_bytes(output);
             }
+            // Fill to the line end with the row's current background. An odd
+            // terminal width leaves a one-column gap (cells are two chars wide),
+            // which the counter's \x1b[J would otherwise fill on the last row
+            // only, leaving a one-cell protrusion at the bottom-right corner.
+            out.push_bytes(b"\x1b[K");
             out.push_newlines(self.config.telnet, 1);
         }
     }

@@ -59,6 +59,8 @@ CLI arguments become `cli::Config`. `main.rs` combines `Config`, terminal metada
 
 Frame data remains private to `animation.rs`. Rendering obtains symbols through `frame_symbol(frame, row, col)`, which returns `FrameSymbol`. Palette lookup remains an O(1) array index via `FrameSymbol::as_byte()`.
 
+Block-mode rows end with `\x1b[K` (erase-to-line-end). Cells are two columns wide, so an odd terminal width leaves a one-column gap on the right that the counter's `\x1b[J` would otherwise fill only on the last row, producing a one-cell protrusion at the bottom-right corner. This per-row fill is a **fork-specific divergence** from the historical C renderer; it is visually a no-op at even widths and is excluded from ASCII modes, which have no background to fill.
+
 Terminal dimensions enter the core as `terminal::TerminalSize`, which stores non-zero `u16` values capped at 10000 columns/rows and exposes signed accessors for crop arithmetic. Syscall and telnet inputs that report zero, invalid, or extreme dimensions are rejected at the adapter boundary and fall back to defaults when appropriate, so untrusted NAWS/ioctl metadata cannot force pathological render loops.
 
 `terminal::detect_terminal_type` is a faithful port of the historical `TERM`-matching chain, with one deliberate **fork-specific divergence**: any `TERM` containing `256color` that the historical chain would otherwise leave unclassified (notably `screen-256color` and `tmux-256color`) maps to the 256-color palette instead of the upstream 16-color fallback. The check is placed last, so every explicit historical mapping — including `rxvt-256color` vs. `rxvt` — is unchanged.
