@@ -170,13 +170,20 @@ impl<'a> Renderer<'a> {
             FrameSymbol::BACKGROUND,
         ];
 
-        if y > 23 && y < 43 && x < 0 {
-            // Generate rainbow tail for negative x coordinates (off-screen left)
-            let mut mod_x = ((-x + 2) % 16) / 8;
+        // The rainbow tail occupies the cat's body band (rows 24..=42) in the
+        // off-screen columns to the left (x < 0), drawn as a two-phase square
+        // wave whose phase flips every couple of frames.
+        const BAND_TOP: i32 = 23;
+        const BAND_BOTTOM: i32 = 43;
+        const STRIPE_PERIOD: i32 = 16;
+        const STRIPE_HALF: i32 = 8;
+
+        if y > BAND_TOP && y < BAND_BOTTOM && x < 0 {
+            let mut mod_x = ((-x + 2) % STRIPE_PERIOD) / STRIPE_HALF;
             if (frame_index / 2) % 2 == 1 {
                 mod_x = 1 - mod_x;
             }
-            let index = (mod_x + y - 23) as usize;
+            let index = (mod_x + y - BAND_TOP) as usize;
             RAINBOW
                 .get(index)
                 .copied()
@@ -190,15 +197,23 @@ impl<'a> Renderer<'a> {
 
     fn render_counter(&self, out: &mut FrameBuffer, state: &RenderState, elapsed_seconds: u64) {
         if self.config.show_counter {
+            const PREFIX: &[u8] = b"You have nyaned for ";
+            const SUFFIX: &[u8] = b" seconds!";
+
             // ASCII palettes (Vt220/Vt100, and NO_COLOR) carry no background, so
             // the counter omits its color escapes there and stays colorless.
             let colored = self.palette.output.is_some();
-            let width = (state.terminal_size.width() - 29 - decimal_digits(elapsed_seconds)) / 2;
+            // Centering width is derived from the surrounding text length, not a
+            // hardcoded constant, so the layout stays correct if the text changes.
+            let text_len = (PREFIX.len() + SUFFIX.len()) as i32 + decimal_digits(elapsed_seconds);
+            let width = (state.terminal_size.width() - text_len) / 2;
             out.push_spaces(width);
             if colored {
                 out.push_bytes(b"\x1b[1;37m");
             }
-            let _ = write!(out, "You have nyaned for {elapsed_seconds} seconds!");
+            out.push_bytes(PREFIX);
+            let _ = write!(out, "{elapsed_seconds}");
+            out.push_bytes(SUFFIX);
             out.push_bytes(b"\x1b[J");
             if colored {
                 out.push_bytes(b"\x1b[0m");
