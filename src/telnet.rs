@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 const IAC: u8 = 255;
 const SEND: u8 = 1;
+const TELNET_OPTION_COUNT: usize = 256;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TelnetCommand {
@@ -127,30 +128,62 @@ impl ByteSource for TimeoutReader {
 }
 
 struct TelnetState {
-    options: [Option<TelnetCommand>; 256],
-    willack: [Option<TelnetCommand>; 256],
-    do_set: [Option<TelnetCommand>; 256],
-    will_set: [Option<TelnetCommand>; 256],
+    options: OptionCommandTable,
+    willack: OptionCommandTable,
+    do_set: OptionCommandTable,
+    will_set: OptionCommandTable,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct OptionCommandTable([Option<TelnetCommand>; TELNET_OPTION_COUNT]);
+
+impl OptionCommandTable {
+    const fn new() -> Self {
+        Self([None; TELNET_OPTION_COUNT])
+    }
+
+    fn get(&self, option: TelnetOption) -> Option<TelnetCommand> {
+        self.0[option.index()]
+    }
+
+    fn set(&mut self, option: TelnetOption, command: TelnetCommand) {
+        self.0[option.index()] = Some(command);
+    }
+
+    fn get_or_set(&mut self, option: TelnetOption, command: TelnetCommand) -> TelnetCommand {
+        if let Some(existing) = self.get(option) {
+            existing
+        } else {
+            self.set(option, command);
+            command
+        }
+    }
 }
 
 impl TelnetState {
     fn new() -> Self {
         let mut state = Self {
-            options: [None; 256],
-            willack: [None; 256],
-            do_set: [None; 256],
-            will_set: [None; 256],
+            options: OptionCommandTable::new(),
+            willack: OptionCommandTable::new(),
+            do_set: OptionCommandTable::new(),
+            will_set: OptionCommandTable::new(),
         };
 
-        state.options[TelnetOption::ECHO.index()] = Some(TelnetCommand::Wont);
-        state.options[TelnetOption::SGA.index()] = Some(TelnetCommand::Will);
-        state.options[TelnetOption::NEW_ENVIRON.index()] = Some(TelnetCommand::Wont);
-        state.willack[TelnetOption::ECHO.index()] = Some(TelnetCommand::Do);
-        state.willack[TelnetOption::SGA.index()] = Some(TelnetCommand::Do);
-        state.willack[TelnetOption::NAWS.index()] = Some(TelnetCommand::Do);
-        state.willack[TelnetOption::TTYPE.index()] = Some(TelnetCommand::Do);
-        state.willack[TelnetOption::LINEMODE.index()] = Some(TelnetCommand::Dont);
-        state.willack[TelnetOption::NEW_ENVIRON.index()] = Some(TelnetCommand::Do);
+        state.options.set(TelnetOption::ECHO, TelnetCommand::Wont);
+        state.options.set(TelnetOption::SGA, TelnetCommand::Will);
+        state
+            .options
+            .set(TelnetOption::NEW_ENVIRON, TelnetCommand::Wont);
+        state.willack.set(TelnetOption::ECHO, TelnetCommand::Do);
+        state.willack.set(TelnetOption::SGA, TelnetCommand::Do);
+        state.willack.set(TelnetOption::NAWS, TelnetCommand::Do);
+        state.willack.set(TelnetOption::TTYPE, TelnetCommand::Do);
+        state
+            .willack
+            .set(TelnetOption::LINEMODE, TelnetCommand::Dont);
+        state
+            .willack
+            .set(TelnetOption::NEW_ENVIRON, TelnetCommand::Do);
 
         state
     }
@@ -167,16 +200,16 @@ impl TelnetState {
     ) {
         match command {
             TelnetCommand::Do | TelnetCommand::Dont => {
-                let current = self.do_set[option.index()];
+                let current = self.do_set.get(option);
                 if current != Some(command) {
-                    self.do_set[option.index()] = Some(command);
+                    self.do_set.set(option, command);
                     out.extend_from_slice(&[IAC, command.raw(), option.raw()]);
                 }
             }
             TelnetCommand::Will | TelnetCommand::Wont => {
-                let current = self.will_set[option.index()];
+                let current = self.will_set.get(option);
                 if current != Some(command) {
-                    self.will_set[option.index()] = Some(command);
+                    self.will_set.set(option, command);
                     out.extend_from_slice(&[IAC, command.raw(), option.raw()]);
                 }
             }
@@ -359,12 +392,10 @@ impl TelnetNegotiation {
 
         for option in 0..=255u8 {
             let option = TelnetOption::new(option);
-            let cmd_opt = self.state.options[option.index()];
-            if let Some(command) = cmd_opt {
+            if let Some(command) = self.state.options.get(option) {
                 self.state.push_option_command(&mut output, command, option);
             }
-            let cmd_willack = self.state.willack[option.index()];
-            if let Some(command) = cmd_willack {
+            if let Some(command) = self.state.willack.get(option) {
                 self.state.push_option_command(&mut output, command, option);
             }
         }
@@ -414,12 +445,8 @@ impl TelnetNegotiation {
         option: TelnetOption,
         output: &mut Vec<u8>,
     ) {
-        if self.state.willack[option.index()].is_none() {
-            self.state.willack[option.index()] = Some(TelnetCommand::Wont);
-        }
-        if let Some(response) = self.state.willack[option.index()] {
-            self.state.push_option_command(output, response, option);
-        }
+        let response = self.state.willack.get_or_set(option, TelnetCommand::Wont);
+        self.state.push_option_command(output, response, option);
 
         if command == TelnetCommand::Will && option == TelnetOption::TTYPE {
             output.extend_from_slice(&[
@@ -434,12 +461,8 @@ impl TelnetNegotiation {
     }
 
     fn handle_do_dont(&mut self, option: TelnetOption, output: &mut Vec<u8>) {
-        if self.state.options[option.index()].is_none() {
-            self.state.options[option.index()] = Some(TelnetCommand::Dont);
-        }
-        if let Some(response) = self.state.options[option.index()] {
-            self.state.push_option_command(output, response, option);
-        }
+        let response = self.state.options.get_or_set(option, TelnetCommand::Dont);
+        self.state.push_option_command(output, response, option);
     }
 
     fn handle_subnegotiation(&mut self, bytes: &[u8]) -> bool {
@@ -716,6 +739,27 @@ mod tests {
             &output,
             &option_command(TelnetCommand::Wont, TelnetOption::NEW_ENVIRON)
         ));
+    }
+
+    #[test]
+    fn option_command_table_tracks_commands_by_telnet_option() {
+        let mut table = OptionCommandTable::new();
+        let unknown = TelnetOption::new(200);
+
+        assert_eq!(table.get(unknown), None);
+        table.set(unknown, TelnetCommand::Wont);
+        assert_eq!(table.get(unknown), Some(TelnetCommand::Wont));
+        assert_eq!(
+            table.get_or_set(unknown, TelnetCommand::Will),
+            TelnetCommand::Wont
+        );
+
+        let other = TelnetOption::new(201);
+        assert_eq!(
+            table.get_or_set(other, TelnetCommand::Will),
+            TelnetCommand::Will
+        );
+        assert_eq!(table.get(other), Some(TelnetCommand::Will));
     }
 
     #[test]
