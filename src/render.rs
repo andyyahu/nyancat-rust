@@ -222,7 +222,10 @@ pub(crate) fn run(
     }
 
     if config.clear_screen {
-        stdout.write_all(b"\x1b[H\x1b[2J\x1b[?25l")?;
+        // Enter the alternate screen buffer so the animation runs on its own
+        // screen and the terminal's prior contents/scrollback are restored on
+        // exit (see runtime::restore_sequence).
+        stdout.write_all(b"\x1b[?1049h\x1b[H\x1b[2J\x1b[?25l")?;
     } else {
         stdout.write_all(b"\x1b[s")?;
     }

@@ -37,8 +37,10 @@ impl Drop for TerminalSession {
 }
 
 fn install_signal_handlers() {
+    sys::install_signal_handler(sys::Signal::Hangup, handle_exit_signal);
     sys::install_signal_handler(sys::Signal::Interrupt, handle_exit_signal);
     sys::install_signal_handler(sys::Signal::Pipe, handle_exit_signal);
+    sys::install_signal_handler(sys::Signal::Terminate, handle_exit_signal);
     sys::install_signal_handler(sys::Signal::WindowChanged, handle_resize_signal);
 }
 
@@ -61,7 +63,9 @@ fn restore_terminal(clear_screen: bool) -> io::Result<()> {
 
 fn restore_sequence(clear_screen: bool) -> &'static [u8] {
     if clear_screen {
-        b"\x1b[?25h\x1b[0m\x1b[H\x1b[2J"
+        // Show the cursor, reset attributes, and leave the alternate screen
+        // buffer, which restores the terminal contents present before startup.
+        b"\x1b[?25h\x1b[0m\x1b[?1049l"
     } else {
         b"\x1b[0m\n"
     }
@@ -72,8 +76,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn restore_sequence_clears_screen_when_requested() {
-        assert_eq!(restore_sequence(true), b"\x1b[?25h\x1b[0m\x1b[H\x1b[2J");
+    fn restore_sequence_leaves_alternate_screen_when_clearing() {
+        assert_eq!(restore_sequence(true), b"\x1b[?25h\x1b[0m\x1b[?1049l");
     }
 
     #[test]

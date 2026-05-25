@@ -2,8 +2,10 @@ use std::ffi::c_void;
 use std::io;
 use std::time::Duration;
 
+const SIGHUP: i32 = 1;
 const SIGINT: i32 = 2;
 const SIGPIPE: i32 = 13;
+const SIGTERM: i32 = 15;
 const SIGWINCH: i32 = 28;
 const POLLIN: i16 = 0x001;
 const POLLERR: i16 = 0x008;
@@ -41,16 +43,20 @@ pub enum StdinRead {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Signal {
+    Hangup,
     Interrupt,
     Pipe,
+    Terminate,
     WindowChanged,
 }
 
 impl Signal {
     const fn number(self) -> i32 {
         match self {
+            Self::Hangup => SIGHUP,
             Self::Interrupt => SIGINT,
             Self::Pipe => SIGPIPE,
+            Self::Terminate => SIGTERM,
             Self::WindowChanged => SIGWINCH,
         }
     }
@@ -191,8 +197,10 @@ mod tests {
 
     #[test]
     fn signal_numbers_match_existing_unix_values() {
+        assert_eq!(Signal::Hangup.number(), SIGHUP);
         assert_eq!(Signal::Interrupt.number(), SIGINT);
         assert_eq!(Signal::Pipe.number(), SIGPIPE);
+        assert_eq!(Signal::Terminate.number(), SIGTERM);
         assert_eq!(Signal::WindowChanged.number(), SIGWINCH);
     }
 

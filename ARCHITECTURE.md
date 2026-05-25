@@ -71,7 +71,9 @@ The geometric crop options (`--min-rows`, `--max-rows`, `--min-cols`, `--max-col
 
 ## Runtime And Signals
 
-Normal execution restores the terminal through `TerminalSession` drop. Signal paths cannot rely on normal unwinding, so they use raw async-signal-compatible output and `sys::exit`.
+Normal execution restores the terminal through `TerminalSession` drop. Signal paths cannot rely on normal unwinding, so they use raw async-signal-compatible output and `sys::exit`. `SIGHUP`, `SIGINT`, `SIGPIPE`, and `SIGTERM` all route to the same restore-and-exit handler, so `kill`, a closed terminal, or Ctrl-C leave the terminal in a clean state.
+
+In clear-screen mode the animation runs on the **alternate screen buffer** (`\x1b[?1049h` at startup, `\x1b[?1049l` on restore), so the terminal's prior contents and scrollback are restored on exit instead of being cleared. The `--no-clear` path is unchanged (save/restore cursor only), which is why the golden smokes — all run with `--no-clear` — are unaffected.
 
 The resize signal path only sets an atomic flag. The render loop consumes that flag, recalculates crop bounds in normal code, and (in clear-screen mode) clears the screen for that one frame so a now-narrower or shorter animation cannot leave stale cells from the previous terminal size along the right edge or below the cat.
 
