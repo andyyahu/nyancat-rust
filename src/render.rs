@@ -97,7 +97,49 @@ impl<'a> Renderer<'a> {
         frame_index: usize,
         elapsed_seconds: u64,
     ) {
+        match self.palette.output {
+            Some(output) => self.render_block_frame(out, state, frame_index, output),
+            None => self.render_ascii_frame(out, state, frame_index),
+        }
+
+        self.render_counter(out, state, elapsed_seconds);
+    }
+
+    fn render_block_frame(
+        &self,
+        out: &mut FrameBuffer,
+        state: &RenderState,
+        frame_index: usize,
+        output: &'static [u8],
+    ) {
         let mut last = 0u8;
+
+        for y in state.min_row..state.max_row {
+            for x in state.min_col..state.max_col {
+                let color = Self::symbol_at(frame_index, y, x);
+                let escape = self.palette.color(color);
+                if color.as_byte() != last && !escape.is_empty() {
+                    last = color.as_byte();
+                    out.push_bytes(escape);
+                }
+                out.push_bytes(output);
+            }
+            out.push_newlines(self.config.telnet, 1);
+        }
+    }
+
+    fn render_ascii_frame(&self, out: &mut FrameBuffer, state: &RenderState, frame_index: usize) {
+        for y in state.min_row..state.max_row {
+            for x in state.min_col..state.max_col {
+                let color = Self::symbol_at(frame_index, y, x);
+                out.push_bytes(self.palette.color(color));
+            }
+            out.push_newlines(self.config.telnet, 1);
+        }
+    }
+
+    #[inline]
+    fn symbol_at(frame_index: usize, y: i32, x: i32) -> FrameSymbol {
         const RAINBOW: &[FrameSymbol] = &[
             FrameSymbol::BACKGROUND,
             FrameSymbol::BACKGROUND,
@@ -121,45 +163,25 @@ impl<'a> Renderer<'a> {
             FrameSymbol::BACKGROUND,
         ];
 
-        for y in state.min_row..state.max_row {
-            for x in state.min_col..state.max_col {
-                let color = if y > 23 && y < 43 && x < 0 {
-                    // Generate rainbow tail for negative x coordinates (off-screen left)
-                    let mut mod_x = ((-x + 2) % 16) / 8;
-                    if (frame_index / 2) % 2 == 1 {
-                        mod_x = 1 - mod_x;
-                    }
-                    let index = (mod_x + y - 23) as usize;
-                    RAINBOW
-                        .get(index)
-                        .copied()
-                        .unwrap_or(FrameSymbol::BACKGROUND)
-                } else if !(0..FRAME_HEIGHT as i32).contains(&y)
-                    || !(0..FRAME_WIDTH as i32).contains(&x)
-                {
-                    FrameSymbol::BACKGROUND
-                } else {
-                    frame_symbol(frame_index, y as usize, x as usize)
-                };
-
-                match self.palette.output {
-                    Some(output) => {
-                        let escape = self.palette.color(color);
-                        if color.as_byte() != last && !escape.is_empty() {
-                            last = color.as_byte();
-                            out.push_bytes(escape);
-                        }
-                        out.push_bytes(output);
-                    }
-                    None => {
-                        // ASCII mode: palette entries already contain the visual representation.
-                        out.push_bytes(self.palette.color(color));
-                    }
-                }
+        if y > 23 && y < 43 && x < 0 {
+            // Generate rainbow tail for negative x coordinates (off-screen left)
+            let mut mod_x = ((-x + 2) % 16) / 8;
+            if (frame_index / 2) % 2 == 1 {
+                mod_x = 1 - mod_x;
             }
-            out.push_newlines(self.config.telnet, 1);
+            let index = (mod_x + y - 23) as usize;
+            RAINBOW
+                .get(index)
+                .copied()
+                .unwrap_or(FrameSymbol::BACKGROUND)
+        } else if !(0..FRAME_HEIGHT as i32).contains(&y) || !(0..FRAME_WIDTH as i32).contains(&x) {
+            FrameSymbol::BACKGROUND
+        } else {
+            frame_symbol(frame_index, y as usize, x as usize)
         }
+    }
 
+    fn render_counter(&self, out: &mut FrameBuffer, state: &RenderState, elapsed_seconds: u64) {
         if self.config.show_counter {
             let width =
                 (state.terminal_size.width - 29 - elapsed_seconds.to_string().len() as i32) / 2;
