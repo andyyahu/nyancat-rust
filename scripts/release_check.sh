@@ -3,6 +3,7 @@ set -eu
 
 BIN=${NYANCAT_BIN:-target/release/nyancat}
 TMP=${TMPDIR:-/tmp}
+GOLDEN_DIR=${GOLDEN_DIR:-tests/golden}
 
 normal_out="$TMP/nyancat-rust-smoke.out"
 telnet_out="$TMP/nyancat-rust-telnet-smoke.out"
@@ -13,6 +14,7 @@ benchmark_err="$TMP/nyancat-rust-benchmark-smoke.err"
 cli_err="$TMP/nyancat-rust-cli-error.err"
 frames_err="$TMP/nyancat-rust-frames-error.err"
 flag_value_err="$TMP/nyancat-rust-flag-value-error.err"
+write_err="$TMP/nyancat-rust-write-error.err"
 help_out="$TMP/nyancat-rust-help.out"
 package_list="$TMP/nyancat-rust-package-list.out"
 archive_log="$TMP/nyancat-rust-release-archive.log"
@@ -25,26 +27,18 @@ cleanup() {
 
 trap cleanup EXIT HUP INT TERM
 
-check_bytes() {
+check_golden() {
     file=$1
-    expected=$2
-    actual=$(wc -c < "$file" | tr -d ' ')
-    if [ "$actual" != "$expected" ]; then
-        echo "byte count mismatch for $file: expected $expected, got $actual" >&2
+    golden=$2
+    label=$3
+    if [ ! -f "$golden" ]; then
+        echo "missing golden $golden for $label; regenerate with scripts/update_goldens.sh" >&2
         exit 1
     fi
-}
-
-check_cksum() {
-    file=$1
-    expected_crc=$2
-    expected_bytes=$3
-    label=$4
-    set -- $(cksum "$file")
-    actual_crc=$1
-    actual_bytes=$2
-    if [ "$actual_crc" != "$expected_crc" ] || [ "$actual_bytes" != "$expected_bytes" ]; then
-        echo "checksum mismatch for $label in $file: expected $expected_crc $expected_bytes, got $actual_crc $actual_bytes" >&2
+    if ! cmp -s "$golden" "$file"; then
+        echo "golden mismatch for $label:" >&2
+        cmp "$golden" "$file" >&2 || true
+        echo "if this output change is intentional, regenerate with scripts/update_goldens.sh and review the git diff" >&2
         exit 1
     fi
 }
@@ -96,6 +90,7 @@ cargo build --release --locked
 echo "== shell script syntax =="
 sh -n scripts/benchmark_matrix.sh
 sh -n scripts/release_archive.sh
+sh -n scripts/update_goldens.sh
 
 echo "== cargo package list =="
 cargo package --list --allow-dirty --locked > "$package_list"
@@ -105,11 +100,13 @@ check_contains "$package_list" "src/main.rs" "package source"
 check_contains "$package_list" "scripts/benchmark_matrix.sh" "package benchmark matrix"
 check_contains "$package_list" "scripts/release_archive.sh" "package release archive helper"
 check_contains "$package_list" "scripts/release_check.sh" "package release check"
+check_contains "$package_list" "scripts/update_goldens.sh" "package goldens updater"
 check_contains "$package_list" "nyancat.1" "package manpage"
 check_contains "$package_list" "systemd/nyancat.socket" "package systemd socket"
 check_absent "$package_list" ".codex" "codex state file"
 check_absent "$package_list" ".cargo/config.toml" "local cargo config"
 check_absent "$package_list" ".github/workflows/ci.yml" "CI workflow"
+check_absent "$package_list" ".github/workflows/release.yml" "release workflow"
 
 echo "== release archive =="
 DIST_DIR="$archive_dir" scripts/release_archive.sh > "$archive_log"
@@ -137,17 +134,11 @@ env TERM=xterm-256color "$BIN" --frames 1 --width 40 --height 24 --no-title --no
 env TERM=xterm-256color "$BIN" --benchmark --frames 3 --no-title --no-clear --no-counter > "$benchmark_out" 2> "$benchmark_err"
 "$BIN" --help > "$help_out"
 
-check_bytes "$normal_out" 4002
-check_bytes "$telnet_out" 3067
-check_bytes "$truecolor_out" 5175
-check_bytes "$crop_out" 4083
-check_bytes "$benchmark_out" 11916
-
-check_cksum "$normal_out" 3491497212 4002 "normal output"
-check_cksum "$telnet_out" 3107447574 3067 "telnet output"
-check_cksum "$truecolor_out" 1251626052 5175 "truecolor output"
-check_cksum "$crop_out" 1400779159 4083 "crop output"
-check_cksum "$benchmark_out" 3251515113 11916 "benchmark output"
+check_golden "$normal_out" "$GOLDEN_DIR/normal.out" "normal output"
+check_golden "$telnet_out" "$GOLDEN_DIR/telnet.out" "telnet output"
+check_golden "$truecolor_out" "$GOLDEN_DIR/truecolor.out" "truecolor output"
+check_golden "$crop_out" "$GOLDEN_DIR/crop.out" "crop output"
+check_golden "$benchmark_out" "$GOLDEN_DIR/benchmark.out" "benchmark output"
 
 esc=$(printf '\033')
 telnet_iac_wont_echo=$(printf '\377\374\001')
@@ -208,5 +199,15 @@ grep -F -- "-C, --max-cols <col>" "$help_out" > /dev/null
 grep -F -- "-W, --width <width>" "$help_out" > /dev/null
 grep -F -- "-H, --height <height>" "$help_out" > /dev/null
 grep -F -- "-h, --help" "$help_out" > /dev/null
+
+# A genuine (non-broken-pipe) write failure must exit non-zero and report the error.
+# /dev/full always fails writes with ENOSPC; it only exists on Linux, so guard on it.
+if [ -c /dev/full ]; then
+    if env TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > /dev/full 2> "$write_err"; then
+        echo "expected write failure smoke to exit non-zero" >&2
+        exit 1
+    fi
+    grep -F "nyancat: " "$write_err" > /dev/null
+fi
 
 echo "release check passed"

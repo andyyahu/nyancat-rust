@@ -47,25 +47,19 @@ env TERM=xterm-256color target/release/nyancat --benchmark --frames 3 --no-title
 target/release/nyancat --wat
 ```
 
-Expected current byte counts:
+Output is verified by exact comparison against committed golden files in `tests/golden/`
+(`normal.out`, `telnet.out`, `truecolor.out`, `crop.out`, `benchmark.out`). `scripts/release_check.sh`
+runs each smoke command and `cmp`s the result against its golden, so a mismatch reports the first
+differing byte instead of an opaque checksum.
 
-```text
- 4002 /tmp/nyancat-rust-smoke.out
- 3067 /tmp/nyancat-rust-telnet-smoke.out
- 5175 /tmp/nyancat-rust-truecolor-smoke.out
- 4083 /tmp/nyancat-rust-crop-smoke.out
-11916 /tmp/nyancat-rust-benchmark-smoke.out
+When a render or output change is intentional, regenerate the goldens and review the diff before committing:
+
+```bash
+scripts/update_goldens.sh
+git diff --stat tests/golden/
 ```
 
-Expected current POSIX `cksum` values:
-
-```text
-3491497212 4002 /tmp/nyancat-rust-smoke.out
-3107447574 3067 /tmp/nyancat-rust-telnet-smoke.out
-1251626052 5175 /tmp/nyancat-rust-truecolor-smoke.out
-1400779159 4083 /tmp/nyancat-rust-crop-smoke.out
-3251515113 11916 /tmp/nyancat-rust-benchmark-smoke.out
-```
+For reference, the current golden sizes are 4002 (normal), 3067 (telnet), 5175 (truecolor), 4083 (crop), and 11916 (benchmark) bytes.
 
 The CLI error smoke must return a non-zero status and print:
 
