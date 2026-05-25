@@ -190,11 +190,19 @@ impl<'a> Renderer<'a> {
 
     fn render_counter(&self, out: &mut FrameBuffer, state: &RenderState, elapsed_seconds: u64) {
         if self.config.show_counter {
+            // ASCII palettes (Vt220/Vt100, and NO_COLOR) carry no background, so
+            // the counter omits its color escapes there and stays colorless.
+            let colored = self.palette.output.is_some();
             let width = (state.terminal_size.width() - 29 - decimal_digits(elapsed_seconds)) / 2;
             out.push_spaces(width);
-            out.push_bytes(b"\x1b[1;37m");
+            if colored {
+                out.push_bytes(b"\x1b[1;37m");
+            }
             let _ = write!(out, "You have nyaned for {elapsed_seconds} seconds!");
-            out.push_bytes(b"\x1b[J\x1b[0m");
+            out.push_bytes(b"\x1b[J");
+            if colored {
+                out.push_bytes(b"\x1b[0m");
+            }
         }
     }
 }

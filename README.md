@@ -130,6 +130,10 @@ nyancat -T
 | `-h` | `--help` | Show help message |
 | `-V` | `--version` | Show version information |
 
+### Environment
+
+- `NO_COLOR` — when set to a non-empty value, nyancat renders in monochrome ASCII (honoring [no-color.org](https://no-color.org)). It does not apply to telnet sessions, where color is the connecting client's concern.
+
 ## 🔧 Development
 
 ### Prerequisites

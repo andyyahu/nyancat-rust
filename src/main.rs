@@ -65,6 +65,11 @@ fn main() -> ExitCode {
     if config.truecolor {
         terminal_type = TerminalType::TrueColor;
     }
+    // Honor NO_COLOR (https://no-color.org) outside telnet, where colour is the
+    // remote client's concern rather than this process's environment.
+    if !config.telnet && no_color_requested() {
+        terminal_type = TerminalType::Vt220;
+    }
     if terminal_type == TerminalType::Vt100Ascii {
         terminal_size = terminal_size.with_width(40);
     }
@@ -104,4 +109,8 @@ fn main() -> ExitCode {
     }
 
     exit_code
+}
+
+fn no_color_requested() -> bool {
+    env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty())
 }

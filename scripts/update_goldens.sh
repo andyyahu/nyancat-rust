@@ -20,10 +20,10 @@ fi
 
 mkdir -p "$GOLDEN_DIR"
 
-env TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > "$GOLDEN_DIR/normal.out"
+env NO_COLOR= TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > "$GOLDEN_DIR/normal.out"
 "$BIN" --telnet --skip-intro --frames 1 --no-title --no-clear --no-counter > "$GOLDEN_DIR/telnet.out"
-env TERM=xterm-256color "$BIN" --truecolor --frames 1 --no-title --no-clear --no-counter > "$GOLDEN_DIR/truecolor.out"
-env TERM=xterm-256color "$BIN" --frames 1 --width 40 --height 24 --no-title --no-clear --no-counter > "$GOLDEN_DIR/crop.out"
-env TERM=xterm-256color "$BIN" --benchmark --frames 3 --no-title --no-clear --no-counter > "$GOLDEN_DIR/benchmark.out" 2>/dev/null
+env NO_COLOR= TERM=xterm-256color "$BIN" --truecolor --frames 1 --no-title --no-clear --no-counter > "$GOLDEN_DIR/truecolor.out"
+env NO_COLOR= TERM=xterm-256color "$BIN" --frames 1 --width 40 --height 24 --no-title --no-clear --no-counter > "$GOLDEN_DIR/crop.out"
+env NO_COLOR= TERM=xterm-256color "$BIN" --benchmark --frames 3 --no-title --no-clear --no-counter > "$GOLDEN_DIR/benchmark.out" 2>/dev/null
 
 echo "updated goldens in $GOLDEN_DIR"

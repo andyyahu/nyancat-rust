@@ -133,11 +133,11 @@ check_contains "$archive_list" "/LICENSE" "archive license"
 check_absent "$archive_list" ".staging" "archive staging directory"
 
 echo "== smoke tests =="
-env TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > "$normal_out"
+env NO_COLOR= TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > "$normal_out"
 "$BIN" --telnet --skip-intro --frames 1 --no-title --no-clear --no-counter > "$telnet_out"
-env TERM=xterm-256color "$BIN" --truecolor --frames 1 --no-title --no-clear --no-counter > "$truecolor_out"
-env TERM=xterm-256color "$BIN" --frames 1 --width 40 --height 24 --no-title --no-clear --no-counter > "$crop_out"
-env TERM=xterm-256color "$BIN" --benchmark --frames 3 --no-title --no-clear --no-counter > "$benchmark_out" 2> "$benchmark_err"
+env NO_COLOR= TERM=xterm-256color "$BIN" --truecolor --frames 1 --no-title --no-clear --no-counter > "$truecolor_out"
+env NO_COLOR= TERM=xterm-256color "$BIN" --frames 1 --width 40 --height 24 --no-title --no-clear --no-counter > "$crop_out"
+env NO_COLOR= TERM=xterm-256color "$BIN" --benchmark --frames 3 --no-title --no-clear --no-counter > "$benchmark_out" 2> "$benchmark_err"
 "$BIN" --help > "$help_out"
 
 check_golden "$normal_out" "$GOLDEN_DIR/normal.out" "normal output"
@@ -166,6 +166,11 @@ check_contains "$telnet_out" "${esc}[s${esc}[u${esc}[104m" "telnet ANSI frame pr
 check_char_count "$normal_out" '\000' 0 "normal NUL bytes"
 check_char_count "$telnet_out" '\000' 23 "telnet NUL newline bytes"
 check_char_count "$telnet_out" '\015' 23 "telnet CR newline bytes"
+
+nocolor_out="$TMP/nyancat-rust-nocolor-smoke.out"
+env NO_COLOR=1 TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > "$nocolor_out"
+check_absent "$nocolor_out" "${esc}[48" "color background under NO_COLOR"
+check_contains "$nocolor_out" "::" "NO_COLOR ascii output"
 
 if "$BIN" --wat > "$cli_err" 2>&1; then
     echo "expected CLI error smoke to fail" >&2
@@ -216,7 +221,7 @@ grep -F -- "-V, --version" "$help_out" > /dev/null
 # A genuine (non-broken-pipe) write failure must exit non-zero and report the error.
 # /dev/full always fails writes with ENOSPC; it only exists on Linux, so guard on it.
 if [ -c /dev/full ]; then
-    if env TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > /dev/full 2> "$write_err"; then
+    if env NO_COLOR= TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > /dev/full 2> "$write_err"; then
         echo "expected write failure smoke to exit non-zero" >&2
         exit 1
     fi
