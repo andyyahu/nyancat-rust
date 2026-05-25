@@ -84,11 +84,17 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 echo "== cargo build --release =="
 cargo build --release --locked
 
+echo "== shell script syntax =="
+sh -n scripts/benchmark_matrix.sh
+sh -n scripts/release_archive.sh
+
 echo "== cargo package list =="
 cargo package --list --allow-dirty --locked > "$package_list"
 check_contains "$package_list" "Cargo.toml" "package manifest"
 check_contains "$package_list" "README.md" "package readme"
 check_contains "$package_list" "src/main.rs" "package source"
+check_contains "$package_list" "scripts/benchmark_matrix.sh" "package benchmark matrix"
+check_contains "$package_list" "scripts/release_archive.sh" "package release archive helper"
 check_contains "$package_list" "scripts/release_check.sh" "package release check"
 check_contains "$package_list" "nyancat.1" "package manpage"
 check_contains "$package_list" "systemd/nyancat.socket" "package systemd socket"

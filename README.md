@@ -144,6 +144,7 @@ cargo build --release
 ```bash
 scripts/release_check.sh
 scripts/benchmark_matrix.sh 100000 5
+scripts/release_archive.sh
 ```
 
 ### Project structure

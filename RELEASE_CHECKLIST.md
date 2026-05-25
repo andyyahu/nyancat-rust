@@ -25,6 +25,7 @@ The script covers:
 - `cargo test --locked`
 - `cargo clippy --locked --all-targets --all-features -- -D warnings`
 - `cargo build --release --locked`
+- `sh -n` syntax checks for release helper scripts
 - `cargo package --list --allow-dirty --locked`, including expected release files and excluding local-only dotfiles
 - Smoke tests, byte count and checksum checks, output marker checks, CLI error checks, and `--help` option coverage
 
@@ -140,6 +141,20 @@ For comparable render-throughput measurements, build in release mode and redirec
 - Confirm `cargo package --list --locked` contains the expected user docs, release scripts, source files, manpage, and systemd files.
 - Confirm the package list excludes local-only files such as `.codex`, `.cargo/config.toml`, and GitHub Actions workflow metadata.
 - Confirm release artifacts are built from a clean checkout or a clean working tree.
+
+To build a local binary release archive:
+
+```bash
+scripts/release_archive.sh
+tar -tzf target/dist/nyancat-vX.Y.Z-<host>.tar.gz
+```
+
+The archive contains:
+
+- `bin/nyancat`
+- `share/man/man1/nyancat.1`
+- `systemd/nyancat.socket` and `systemd/nyancat@.service`
+- user docs, release docs, license, changelog, and Cargo manifest files
 
 ## Tagging
 

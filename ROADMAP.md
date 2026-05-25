@@ -116,7 +116,7 @@
 - 確認 `Cargo.toml` metadata 是否足夠支援 crates.io 或 GitHub release。
 - 將 package manifest 檢查納入 release gate，避免發行檔案清單或 metadata 在最後一刻才出問題。
 - 確認 manpage、systemd service、README 安裝步驟一致。
-- 考慮提供 release archive checklist，而不是只依賴本機 build。
+- 提供 release archive helper / checklist，而不是只依賴本機 build。
 - 如果要改 default branch 名稱，先同步本機、GitHub default branch、README 文件。
 
 完成標準：
