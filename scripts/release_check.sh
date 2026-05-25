@@ -14,6 +14,7 @@ cli_err="$TMP/nyancat-rust-cli-error.err"
 frames_err="$TMP/nyancat-rust-frames-error.err"
 flag_value_err="$TMP/nyancat-rust-flag-value-error.err"
 help_out="$TMP/nyancat-rust-help.out"
+package_list="$TMP/nyancat-rust-package-list.out"
 
 check_bytes() {
     file=$1
@@ -82,6 +83,18 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 
 echo "== cargo build --release =="
 cargo build --release --locked
+
+echo "== cargo package list =="
+cargo package --list --allow-dirty --locked > "$package_list"
+check_contains "$package_list" "Cargo.toml" "package manifest"
+check_contains "$package_list" "README.md" "package readme"
+check_contains "$package_list" "src/main.rs" "package source"
+check_contains "$package_list" "scripts/release_check.sh" "package release check"
+check_contains "$package_list" "nyancat.1" "package manpage"
+check_contains "$package_list" "systemd/nyancat.socket" "package systemd socket"
+check_absent "$package_list" ".codex" "codex state file"
+check_absent "$package_list" ".cargo/config.toml" "local cargo config"
+check_absent "$package_list" ".github/workflows/ci.yml" "CI workflow"
 
 echo "== smoke tests =="
 env TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > "$normal_out"

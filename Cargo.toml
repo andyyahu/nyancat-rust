@@ -3,7 +3,27 @@ name = "nyancat"
 version = "1.6.0"
 edition = "2024"
 rust-version = "1.85"
+description = "A fast, colorful Nyancat animation for Unix terminals."
+readme = "README.md"
+homepage = "http://nyancat.dakko.us/"
+repository = "https://github.com/andyyahu/nyancat"
 license = "NCSA"
+keywords = ["nyancat", "terminal", "ansi", "telnet", "benchmark"]
+categories = ["command-line-utilities"]
+include = [
+    "/src/**",
+    "/scripts/**",
+    "/systemd/**",
+    "/ARCHITECTURE.md",
+    "/CHANGELOG",
+    "/Cargo.lock",
+    "/Cargo.toml",
+    "/LICENSE",
+    "/README.md",
+    "/RELEASE_CHECKLIST.md",
+    "/ROADMAP.md",
+    "/nyancat.1",
+]
 
 [dependencies]
 

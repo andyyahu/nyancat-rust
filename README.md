@@ -151,7 +151,8 @@ scripts/benchmark_matrix.sh 100000
 - `src/main.rs` - Startup orchestration
 - `src/animation.rs` - Frame data
 - `src/cli.rs` - Command-line parsing and configuration
-- `src/render.rs` - Palette setup and animation rendering
+- `src/render.rs` - Render orchestration and frame composition
+- `src/render/` - Palette lookup, frame buffer, render loop timing, and benchmark accounting
 - `src/telnet.rs` - Telnet negotiation
 - `src/terminal.rs` - Terminal size and type detection
 - `src/runtime.rs` - Exit and signal handling
