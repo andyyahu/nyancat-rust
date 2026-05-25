@@ -89,6 +89,14 @@ pub(crate) fn detect_terminal_type(term: Option<&str>, size: TerminalSize) -> Te
         TerminalType::Xterm256
     } else if term.starts_with("truecolor") {
         TerminalType::TrueColor
+    } else if term.contains("256color") {
+        // Fork-specific divergence from the historical C detection chain: any
+        // terminal advertising 256-color support (e.g. screen-256color,
+        // tmux-256color) uses the 256-color palette instead of the upstream
+        // 16-color fallback. Placed last so it only upgrades terminals the
+        // historical chain leaves unclassified; rxvt-256color and friends are
+        // still matched by their explicit branches above.
+        TerminalType::Xterm256
     } else {
         TerminalType::Ansi16
     }
@@ -118,6 +126,29 @@ mod tests {
         );
         assert_eq!(
             detect_terminal_type(None, TerminalSize::new(80, 24)),
+            TerminalType::Ansi16
+        );
+    }
+
+    #[test]
+    fn terminals_advertising_256color_use_the_256_color_palette() {
+        // Fork-specific upgrade: screen/tmux and other *-256color terminals.
+        assert_eq!(
+            detect_terminal_type(Some("screen-256color"), TerminalSize::new(80, 24)),
+            TerminalType::Xterm256
+        );
+        assert_eq!(
+            detect_terminal_type(Some("tmux-256color"), TerminalSize::new(80, 24)),
+            TerminalType::Xterm256
+        );
+        // The explicit rxvt-256color branch must still win over the rxvt branch.
+        assert_eq!(
+            detect_terminal_type(Some("rxvt-256color"), TerminalSize::new(80, 24)),
+            TerminalType::Xterm256
+        );
+        // Plain screen advertises only 8/16 colors, so it stays the 16-color fallback.
+        assert_eq!(
+            detect_terminal_type(Some("screen"), TerminalSize::new(80, 24)),
             TerminalType::Ansi16
         );
     }
