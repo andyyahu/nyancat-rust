@@ -15,6 +15,15 @@ frames_err="$TMP/nyancat-rust-frames-error.err"
 flag_value_err="$TMP/nyancat-rust-flag-value-error.err"
 help_out="$TMP/nyancat-rust-help.out"
 package_list="$TMP/nyancat-rust-package-list.out"
+archive_log="$TMP/nyancat-rust-release-archive.log"
+archive_list="$TMP/nyancat-rust-release-archive-list.out"
+archive_dir=$(mktemp -d "$TMP/nyancat-rust-release-archive.XXXXXX")
+
+cleanup() {
+    rm -rf "$archive_dir"
+}
+
+trap cleanup EXIT HUP INT TERM
 
 check_bytes() {
     file=$1
@@ -101,6 +110,24 @@ check_contains "$package_list" "systemd/nyancat.socket" "package systemd socket"
 check_absent "$package_list" ".codex" "codex state file"
 check_absent "$package_list" ".cargo/config.toml" "local cargo config"
 check_absent "$package_list" ".github/workflows/ci.yml" "CI workflow"
+
+echo "== release archive =="
+DIST_DIR="$archive_dir" scripts/release_archive.sh > "$archive_log"
+archive_path=$(sed -n 's/^release archive: //p' "$archive_log")
+if [ ! -f "$archive_path" ]; then
+    echo "release archive was not created: $archive_path" >&2
+    exit 1
+fi
+
+tar -tzf "$archive_path" > "$archive_list"
+check_contains "$archive_list" "/bin/nyancat" "archive binary"
+check_contains "$archive_list" "/share/man/man1/nyancat.1" "archive manpage"
+check_contains "$archive_list" "/systemd/nyancat.socket" "archive systemd socket"
+check_contains "$archive_list" "/systemd/nyancat@.service" "archive systemd service"
+check_contains "$archive_list" "/docs/RELEASE_CHECKLIST.md" "archive release checklist"
+check_contains "$archive_list" "/README.md" "archive README"
+check_contains "$archive_list" "/LICENSE" "archive license"
+check_absent "$archive_list" ".staging" "archive staging directory"
 
 echo "== smoke tests =="
 env TERM=xterm-256color "$BIN" --frames 1 --no-title --no-clear --no-counter > "$normal_out"

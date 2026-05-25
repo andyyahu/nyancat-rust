@@ -21,6 +21,7 @@ cargo build --release --locked
 
 mkdir -p "$DIST"
 STAGING_PARENT=$(mktemp -d "$DIST/.staging.XXXXXX")
+trap 'rm -rf "$STAGING_PARENT"' EXIT HUP INT TERM
 STAGING="$STAGING_PARENT/$ARCHIVE_ROOT"
 
 mkdir -p \
@@ -38,4 +39,3 @@ cp systemd/nyancat.socket systemd/nyancat@.service "$STAGING/systemd/"
 tar -C "$STAGING_PARENT" -czf "$ARCHIVE" "$ARCHIVE_ROOT"
 
 printf 'release archive: %s\n' "$ARCHIVE"
-printf 'staging directory: %s\n' "$STAGING_PARENT"

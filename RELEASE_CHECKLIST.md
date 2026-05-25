@@ -27,6 +27,7 @@ The script covers:
 - `cargo build --release --locked`
 - `sh -n` syntax checks for release helper scripts
 - `cargo package --list --allow-dirty --locked`, including expected release files and excluding local-only dotfiles
+- `scripts/release_archive.sh` with a temporary dist directory, followed by archive content checks
 - Smoke tests, byte count and checksum checks, output marker checks, CLI error checks, and `--help` option coverage
 
 GitHub Actions also runs the release check on stable Rust and a separate MSRV build/test job for Rust 1.85.0.
@@ -140,7 +141,7 @@ For comparable render-throughput measurements, build in release mode and redirec
 - Confirm `systemd/nyancat.socket` and `systemd/nyancat@.service` still reference the intended binary path and socket behavior.
 - Confirm `cargo package --list --locked` contains the expected user docs, release scripts, source files, manpage, and systemd files.
 - Confirm the package list excludes local-only files such as `.codex`, `.cargo/config.toml`, and GitHub Actions workflow metadata.
-- Confirm release artifacts are built from a clean checkout or a clean working tree.
+- Confirm release artifacts are built from a clean checkout or a clean working tree; `scripts/release_check.sh` builds a temporary archive and verifies its contents.
 
 To build a local binary release archive:
 
