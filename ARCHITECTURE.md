@@ -63,6 +63,8 @@ Terminal dimensions enter the core as `terminal::TerminalSize`, which stores non
 
 CLI option metadata lives in `cli::OPTION_SPECS`. Parsing, value arity, and generated `--help` output all use that table so public option drift is caught in one module.
 
+The geometric crop options (`--min-rows`, `--max-rows`, `--min-cols`, `--max-cols`, `--width`, `--height`) are range-checked at the CLI boundary: sizes to `1..=10000` and offsets to `-10000..=10000`. This is a **fork-specific safety bound** not present in the historical C implementation. The limits sit far beyond any real terminal, so they do not affect normal use, but they stop extreme values from overflowing crop arithmetic — both the centered-range computation in `cli.rs` and the rainbow-tail negation in the render path — and from forcing multi-billion-iteration render loops. As a result the render core only ever receives crop values that are already known to be sane, consistent with the goal of validating untrusted input at the boundary rather than in the hot path.
+
 ## Runtime And Signals
 
 Normal execution restores the terminal through `TerminalSession` drop. Signal paths cannot rely on normal unwinding, so they use raw async-signal-compatible output and `sys::exit`.

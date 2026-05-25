@@ -520,6 +520,26 @@ fn apply_flag(
     Ok(None)
 }
 
+/// Fork-specific safety bounds on the geometric crop options. The limits are
+/// far larger than any real terminal, so they do not affect normal use, but
+/// they stop extreme values from overflowing crop arithmetic or forcing
+/// multi-billion-iteration render loops.
+const CROP_OFFSET_LIMIT: i32 = 10_000;
+const CROP_SIZE_LIMIT: i32 = 10_000;
+
+fn bounded(option: &str, value: i32, min: i32, max: i32) -> Result<i32, CliError> {
+    if (min..=max).contains(&value) {
+        Ok(value)
+    } else {
+        Err(CliError::ValueOutOfRange {
+            option: option.to_string(),
+            value,
+            min,
+            max,
+        })
+    }
+}
+
 fn apply_value_option(
     config: &mut Config,
     spec: OptionSpec,
@@ -533,15 +553,7 @@ fn apply_value_option(
 
     match spec.id {
         OptionId::Delay => {
-            if !(10..=1000).contains(&parsed) {
-                return Err(CliError::ValueOutOfRange {
-                    option: option.to_string(),
-                    value: parsed,
-                    min: 10,
-                    max: 1000,
-                });
-            }
-            config.delay = Duration::from_millis(parsed as u64);
+            config.delay = Duration::from_millis(bounded(option, parsed, 10, 1000)? as u64);
         }
         OptionId::Frames => {
             if parsed <= 0 {
@@ -552,27 +564,29 @@ fn apply_value_option(
             }
             config.frame_limit = FrameLimit::new(parsed as u32);
         }
-        OptionId::MinRows => config.crop.rows.set_min(parsed),
-        OptionId::MaxRows => config.crop.rows.set_max(parsed),
-        OptionId::MinCols => config.crop.cols.set_min(parsed),
-        OptionId::MaxCols => config.crop.cols.set_max(parsed),
+        OptionId::MinRows => {
+            let offset = bounded(option, parsed, -CROP_OFFSET_LIMIT, CROP_OFFSET_LIMIT)?;
+            config.crop.rows.set_min(offset);
+        }
+        OptionId::MaxRows => {
+            let offset = bounded(option, parsed, -CROP_OFFSET_LIMIT, CROP_OFFSET_LIMIT)?;
+            config.crop.rows.set_max(offset);
+        }
+        OptionId::MinCols => {
+            let offset = bounded(option, parsed, -CROP_OFFSET_LIMIT, CROP_OFFSET_LIMIT)?;
+            config.crop.cols.set_min(offset);
+        }
+        OptionId::MaxCols => {
+            let offset = bounded(option, parsed, -CROP_OFFSET_LIMIT, CROP_OFFSET_LIMIT)?;
+            config.crop.cols.set_max(offset);
+        }
         OptionId::Width => {
-            if parsed <= 0 {
-                return Err(CliError::NonPositiveValue {
-                    option: option.to_string(),
-                    value: parsed,
-                });
-            }
-            config.crop.cols = AxisCrop::centered(FRAME_WIDTH as i32, parsed);
+            let size = bounded(option, parsed, 1, CROP_SIZE_LIMIT)?;
+            config.crop.cols = AxisCrop::centered(FRAME_WIDTH as i32, size);
         }
         OptionId::Height => {
-            if parsed <= 0 {
-                return Err(CliError::NonPositiveValue {
-                    option: option.to_string(),
-                    value: parsed,
-                });
-            }
-            config.crop.rows = AxisCrop::centered(FRAME_HEIGHT as i32, parsed);
+            let size = bounded(option, parsed, 1, CROP_SIZE_LIMIT)?;
+            config.crop.rows = AxisCrop::centered(FRAME_HEIGHT as i32, size);
         }
         _ => {
             return Err(CliError::UnknownOption {
@@ -633,23 +647,53 @@ mod tests {
     }
 
     #[test]
-    fn width_and_height_reject_non_positive_values() {
+    fn width_height_and_crop_offsets_are_bounded() {
         let mut config = Config::default();
+
+        // Sizes must be positive and within the fork-specific safety cap.
         assert_eq!(
             apply_value_option(&mut config, value_spec('W'), "-W", "0"),
-            Err(CliError::NonPositiveValue {
+            Err(CliError::ValueOutOfRange {
                 option: "-W".to_string(),
                 value: 0,
+                min: 1,
+                max: 10_000,
+            })
+        );
+        assert_eq!(
+            apply_value_option(&mut config, value_spec('W'), "-W", "10001"),
+            Err(CliError::ValueOutOfRange {
+                option: "-W".to_string(),
+                value: 10_001,
+                min: 1,
+                max: 10_000,
             })
         );
         // i32::MIN previously overflowed AxisCrop::centered.
         assert_eq!(
             apply_value_option(&mut config, value_spec('H'), "-H", "-2147483648"),
-            Err(CliError::NonPositiveValue {
+            Err(CliError::ValueOutOfRange {
                 option: "-H".to_string(),
                 value: -2147483648,
+                min: 1,
+                max: 10_000,
             })
         );
+        // Offsets may be negative but are still bounded; i32::MIN previously
+        // overflowed the rainbow-tail negation in the render path.
+        assert_eq!(
+            apply_value_option(&mut config, value_spec('c'), "-c", "-2147483648"),
+            Err(CliError::ValueOutOfRange {
+                option: "-c".to_string(),
+                value: -2147483648,
+                min: -10_000,
+                max: 10_000,
+            })
+        );
+
+        // Representative in-range values are accepted.
+        assert!(apply_value_option(&mut config, value_spec('W'), "-W", "10000").is_ok());
+        assert!(apply_value_option(&mut config, value_spec('c'), "-c", "-10000").is_ok());
     }
 
     #[test]
