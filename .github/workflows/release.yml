@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
 
       - name: Install stable Rust
         run: |
@@ -46,7 +48,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          gh release create "$TAG" --generate-notes --verify-tag || echo "release already exists; updating assets"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release exists; updating assets"
+          else
+            gh release create "$TAG" --generate-notes --verify-tag
+          fi
           gh release upload "$TAG" "${{ steps.archive.outputs.path }}" --clobber
 
   macos:
@@ -58,6 +64,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
 
       - name: Install stable Rust
         run: |

@@ -3,3 +3,4 @@ nyancat
 *.pyc
 /target
 /CLAUDE.md
+/.cargo/config.toml

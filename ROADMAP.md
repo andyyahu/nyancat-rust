@@ -114,7 +114,7 @@
 
 這部分會把終端玩具推向正式軟體發行品質。
 
-- `v*` tag 會觸發 `.github/workflows/release.yml`：linux job 先跑 `scripts/release_check.sh` gate，再用 `scripts/release_archive.sh` 建 archive 並建立 GitHub Release；macOS job 接著上傳對應 archive。目前產出 x86_64-linux 與 arm64-macOS 兩個 artifact，更多 target（其他 arch / BSD）是後續 build matrix 延伸。
+- `v*` tag 會觸發 `.github/workflows/release.yml`：linux job 先 checkout 對應 tag、跑 `scripts/release_check.sh` gate，再用 `scripts/release_archive.sh` 建 archive 並建立 GitHub Release；macOS job checkout 同一 tag 並上傳對應 archive。目前產出 x86_64-linux 與 arm64-macOS 兩個 artifact，更多 target（其他 arch / BSD）是後續 build matrix 延伸。
 - crates.io 發佈仍是「刻意延遲」的決策，不進自動化：需要先確認 crate 名稱所有權與發佈 token，且發佈是不可逆動作，應由維護者手動執行而非 CI 自動觸發。`Cargo.toml` metadata 已具備 description/repository/homepage/readme/license/keywords/categories,足以支援 GitHub Release 與未來的 crates.io。
 - 將 package manifest 檢查納入 release gate，避免發行檔案清單或 metadata 在最後一刻才出問題。
 - 確認 manpage、systemd service、README 安裝步驟一致。
