@@ -4,21 +4,74 @@ use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
 const IAC: u8 = 255;
-const DONT: u8 = 254;
-const DO: u8 = 253;
-const WONT: u8 = 252;
-const WILL: u8 = 251;
-const SE: u8 = 240;
-const NOP: u8 = 241;
-const SB: u8 = 250;
-
-const ECHO: u8 = 1;
-const SGA: u8 = 3;
-const TTYPE: u8 = 24;
-const NAWS: u8 = 31;
-const LINEMODE: u8 = 34;
-const NEW_ENVIRON: u8 = 39;
 const SEND: u8 = 1;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TelnetCommand {
+    Se,
+    Nop,
+    Sb,
+    Will,
+    Wont,
+    Do,
+    Dont,
+    Iac,
+    Unknown(u8),
+}
+
+impl TelnetCommand {
+    fn from_byte(byte: u8) -> Self {
+        match byte {
+            240 => Self::Se,
+            241 => Self::Nop,
+            250 => Self::Sb,
+            251 => Self::Will,
+            252 => Self::Wont,
+            253 => Self::Do,
+            254 => Self::Dont,
+            255 => Self::Iac,
+            byte => Self::Unknown(byte),
+        }
+    }
+
+    const fn raw(self) -> u8 {
+        match self {
+            Self::Se => 240,
+            Self::Nop => 241,
+            Self::Sb => 250,
+            Self::Will => 251,
+            Self::Wont => 252,
+            Self::Do => 253,
+            Self::Dont => 254,
+            Self::Iac => 255,
+            Self::Unknown(byte) => byte,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TelnetOption(u8);
+
+impl TelnetOption {
+    const ECHO: Self = Self(1);
+    const SGA: Self = Self(3);
+    const TTYPE: Self = Self(24);
+    const NAWS: Self = Self(31);
+    const LINEMODE: Self = Self(34);
+    const NEW_ENVIRON: Self = Self(39);
+
+    const fn new(byte: u8) -> Self {
+        Self(byte)
+    }
+
+    const fn raw(self) -> u8 {
+        self.0
+    }
+
+    const fn index(self) -> usize {
+        self.0 as usize
+    }
+}
 
 trait ByteSource {
     fn read_byte(&mut self, deadline: Instant) -> io::Result<Option<u8>>;
@@ -74,51 +127,60 @@ impl ByteSource for TimeoutReader {
 }
 
 struct TelnetState {
-    options: [u8; 256],
-    willack: [u8; 256],
-    do_set: [u8; 256],
-    will_set: [u8; 256],
+    options: [Option<TelnetCommand>; 256],
+    willack: [Option<TelnetCommand>; 256],
+    do_set: [Option<TelnetCommand>; 256],
+    will_set: [Option<TelnetCommand>; 256],
 }
 
 impl TelnetState {
     fn new() -> Self {
         let mut state = Self {
-            options: [0; 256],
-            willack: [0; 256],
-            do_set: [0; 256],
-            will_set: [0; 256],
+            options: [None; 256],
+            willack: [None; 256],
+            do_set: [None; 256],
+            will_set: [None; 256],
         };
 
-        state.options[ECHO as usize] = WONT;
-        state.options[SGA as usize] = WILL;
-        state.options[NEW_ENVIRON as usize] = WONT;
-        state.willack[ECHO as usize] = DO;
-        state.willack[SGA as usize] = DO;
-        state.willack[NAWS as usize] = DO;
-        state.willack[TTYPE as usize] = DO;
-        state.willack[LINEMODE as usize] = DONT;
-        state.willack[NEW_ENVIRON as usize] = DO;
+        state.options[TelnetOption::ECHO.index()] = Some(TelnetCommand::Wont);
+        state.options[TelnetOption::SGA.index()] = Some(TelnetCommand::Will);
+        state.options[TelnetOption::NEW_ENVIRON.index()] = Some(TelnetCommand::Wont);
+        state.willack[TelnetOption::ECHO.index()] = Some(TelnetCommand::Do);
+        state.willack[TelnetOption::SGA.index()] = Some(TelnetCommand::Do);
+        state.willack[TelnetOption::NAWS.index()] = Some(TelnetCommand::Do);
+        state.willack[TelnetOption::TTYPE.index()] = Some(TelnetCommand::Do);
+        state.willack[TelnetOption::LINEMODE.index()] = Some(TelnetCommand::Dont);
+        state.willack[TelnetOption::NEW_ENVIRON.index()] = Some(TelnetCommand::Do);
 
         state
     }
 
-    fn push_command(&mut self, out: &mut Vec<u8>, cmd: u8, opt: u8) {
-        match cmd {
-            DO | DONT => {
-                let current = self.do_set[opt as usize];
-                if (cmd == DO && current != DO) || (cmd == DONT && current != DONT) {
-                    self.do_set[opt as usize] = cmd;
-                    out.extend_from_slice(&[IAC, cmd, opt]);
+    fn push_command(&mut self, out: &mut Vec<u8>, command: TelnetCommand) {
+        out.extend_from_slice(&[IAC, command.raw()]);
+    }
+
+    fn push_option_command(
+        &mut self,
+        out: &mut Vec<u8>,
+        command: TelnetCommand,
+        option: TelnetOption,
+    ) {
+        match command {
+            TelnetCommand::Do | TelnetCommand::Dont => {
+                let current = self.do_set[option.index()];
+                if current != Some(command) {
+                    self.do_set[option.index()] = Some(command);
+                    out.extend_from_slice(&[IAC, command.raw(), option.raw()]);
                 }
             }
-            WILL | WONT => {
-                let current = self.will_set[opt as usize];
-                if (cmd == WILL && current != WILL) || (cmd == WONT && current != WONT) {
-                    self.will_set[opt as usize] = cmd;
-                    out.extend_from_slice(&[IAC, cmd, opt]);
+            TelnetCommand::Will | TelnetCommand::Wont => {
+                let current = self.will_set[option.index()];
+                if current != Some(command) {
+                    self.will_set[option.index()] = Some(command);
+                    out.extend_from_slice(&[IAC, command.raw(), option.raw()]);
                 }
             }
-            _ => out.extend_from_slice(&[IAC, cmd]),
+            _ => self.push_command(out, command),
         }
     }
 }
@@ -136,14 +198,16 @@ enum Subnegotiation {
 }
 
 fn parse_subnegotiation(bytes: &[u8]) -> Option<Subnegotiation> {
-    match bytes.first().copied() {
-        Some(TTYPE) if bytes.len() >= 2 => Some(Subnegotiation::TerminalType(
+    match bytes.first().copied().map(TelnetOption::new) {
+        Some(TelnetOption::TTYPE) if bytes.len() >= 2 => Some(Subnegotiation::TerminalType(
             String::from_utf8_lossy(&bytes[2..]).into_owned(),
         )),
-        Some(NAWS) if bytes.len() >= 5 => Some(Subnegotiation::WindowSize(TerminalSize::new(
-            u16::from_be_bytes([bytes[1], bytes[2]]) as i32,
-            u16::from_be_bytes([bytes[3], bytes[4]]) as i32,
-        ))),
+        Some(TelnetOption::NAWS) if bytes.len() >= 5 => {
+            Some(Subnegotiation::WindowSize(TerminalSize::new(
+                u16::from_be_bytes([bytes[1], bytes[2]]) as i32,
+                u16::from_be_bytes([bytes[3], bytes[4]]) as i32,
+            )))
+        }
         _ => None,
     }
 }
@@ -153,7 +217,7 @@ enum TelnetParserState {
     Data,
     DataIac,
     CommandOption {
-        command: u8,
+        command: TelnetCommand,
         in_subnegotiation: bool,
     },
     Subnegotiation,
@@ -162,8 +226,11 @@ enum TelnetParserState {
 
 #[derive(Debug, Eq, PartialEq)]
 enum TelnetEvent {
-    Command(u8),
-    Negotiation { command: u8, option: u8 },
+    Command(TelnetCommand),
+    Negotiation {
+        command: TelnetCommand,
+        option: TelnetOption,
+    },
     Subnegotiation(Vec<u8>),
 }
 
@@ -200,7 +267,7 @@ impl TelnetParser {
                 };
                 Some(TelnetEvent::Negotiation {
                     command,
-                    option: byte,
+                    option: TelnetOption::new(byte),
                 })
             }
             TelnetParserState::Subnegotiation => {
@@ -215,33 +282,34 @@ impl TelnetParser {
         }
     }
 
-    fn handle_iac(&mut self, command: u8, in_subnegotiation: bool) -> Option<TelnetEvent> {
+    fn handle_iac(&mut self, byte: u8, in_subnegotiation: bool) -> Option<TelnetEvent> {
+        let command = TelnetCommand::from_byte(byte);
         match command {
-            SE => {
+            TelnetCommand::Se => {
                 self.state = TelnetParserState::Data;
                 Some(TelnetEvent::Subnegotiation(self.sb.clone()))
             }
-            NOP => {
+            TelnetCommand::Nop => {
                 self.state = if in_subnegotiation {
                     TelnetParserState::Subnegotiation
                 } else {
                     TelnetParserState::Data
                 };
-                Some(TelnetEvent::Command(NOP))
+                Some(TelnetEvent::Command(TelnetCommand::Nop))
             }
-            WILL | WONT | DO | DONT => {
+            TelnetCommand::Will | TelnetCommand::Wont | TelnetCommand::Do | TelnetCommand::Dont => {
                 self.state = TelnetParserState::CommandOption {
                     command,
                     in_subnegotiation,
                 };
                 None
             }
-            SB => {
+            TelnetCommand::Sb => {
                 self.state = TelnetParserState::Subnegotiation;
                 self.sb.clear();
                 None
             }
-            IAC => {
+            TelnetCommand::Iac => {
                 if in_subnegotiation {
                     self.state = TelnetParserState::Subnegotiation;
                     if self.sb.len() < 1023 {
@@ -291,13 +359,14 @@ impl TelnetNegotiation {
         let mut output = Vec::new();
 
         for option in 0..=255u8 {
-            let cmd_opt = self.state.options[option as usize];
-            if cmd_opt != 0 {
-                self.state.push_command(&mut output, cmd_opt, option);
+            let option = TelnetOption::new(option);
+            let cmd_opt = self.state.options[option.index()];
+            if let Some(command) = cmd_opt {
+                self.state.push_option_command(&mut output, command, option);
             }
-            let cmd_willack = self.state.willack[option as usize];
-            if cmd_willack != 0 {
-                self.state.push_command(&mut output, cmd_willack, option);
+            let cmd_willack = self.state.willack[option.index()];
+            if let Some(command) = cmd_willack {
+                self.state.push_option_command(&mut output, command, option);
             }
         }
 
@@ -316,13 +385,18 @@ impl TelnetNegotiation {
         let mut step = NegotiationStep::default();
 
         match event {
-            TelnetEvent::Command(NOP) => {
-                self.state.push_command(&mut step.output, NOP, 0);
+            TelnetEvent::Command(TelnetCommand::Nop) => {
+                self.state
+                    .push_command(&mut step.output, TelnetCommand::Nop);
             }
             TelnetEvent::Command(_) => {}
             TelnetEvent::Negotiation { command, option } => match command {
-                WILL | WONT => self.handle_will_wont(command, option, &mut step.output),
-                DO | DONT => self.handle_do_dont(option, &mut step.output),
+                TelnetCommand::Will | TelnetCommand::Wont => {
+                    self.handle_will_wont(command, option, &mut step.output)
+                }
+                TelnetCommand::Do | TelnetCommand::Dont => {
+                    self.handle_do_dont(option, &mut step.output)
+                }
                 _ => {}
             },
             TelnetEvent::Subnegotiation(bytes) => {
@@ -335,24 +409,38 @@ impl TelnetNegotiation {
         step
     }
 
-    fn handle_will_wont(&mut self, command: u8, option: u8, output: &mut Vec<u8>) {
-        if self.state.willack[option as usize] == 0 {
-            self.state.willack[option as usize] = WONT;
+    fn handle_will_wont(
+        &mut self,
+        command: TelnetCommand,
+        option: TelnetOption,
+        output: &mut Vec<u8>,
+    ) {
+        if self.state.willack[option.index()].is_none() {
+            self.state.willack[option.index()] = Some(TelnetCommand::Wont);
         }
-        self.state
-            .push_command(output, self.state.willack[option as usize], option);
+        if let Some(response) = self.state.willack[option.index()] {
+            self.state.push_option_command(output, response, option);
+        }
 
-        if command == WILL && option == TTYPE {
-            output.extend_from_slice(&[IAC, SB, TTYPE, SEND, IAC, SE]);
+        if command == TelnetCommand::Will && option == TelnetOption::TTYPE {
+            output.extend_from_slice(&[
+                IAC,
+                TelnetCommand::Sb.raw(),
+                TelnetOption::TTYPE.raw(),
+                SEND,
+                IAC,
+                TelnetCommand::Se.raw(),
+            ]);
         }
     }
 
-    fn handle_do_dont(&mut self, option: u8, output: &mut Vec<u8>) {
-        if self.state.options[option as usize] == 0 {
-            self.state.options[option as usize] = DONT;
+    fn handle_do_dont(&mut self, option: TelnetOption, output: &mut Vec<u8>) {
+        if self.state.options[option.index()].is_none() {
+            self.state.options[option.index()] = Some(TelnetCommand::Dont);
         }
-        self.state
-            .push_command(output, self.state.options[option as usize], option);
+        if let Some(response) = self.state.options[option.index()] {
+            self.state.push_option_command(output, response, option);
+        }
     }
 
     fn handle_subnegotiation(&mut self, bytes: &[u8]) -> bool {
@@ -425,6 +513,29 @@ mod tests {
             .any(|window| window == needle)
     }
 
+    fn command(command: TelnetCommand) -> u8 {
+        command.raw()
+    }
+
+    fn option(option: TelnetOption) -> u8 {
+        option.raw()
+    }
+
+    fn option_command(command: TelnetCommand, option: TelnetOption) -> [u8; 3] {
+        [IAC, command.raw(), option.raw()]
+    }
+
+    fn terminal_type_send() -> [u8; 6] {
+        [
+            IAC,
+            command(TelnetCommand::Sb),
+            option(TelnetOption::TTYPE),
+            SEND,
+            IAC,
+            command(TelnetCommand::Se),
+        ]
+    }
+
     struct ScriptedByteSource {
         bytes: Vec<u8>,
         position: usize,
@@ -449,7 +560,7 @@ mod tests {
     #[test]
     fn parses_terminal_type_subnegotiation() {
         assert_eq!(
-            parse_subnegotiation(&[TTYPE, 0, b'x', b't', b'e', b'r', b'm']),
+            parse_subnegotiation(&[option(TelnetOption::TTYPE), 0, b'x', b't', b'e', b'r', b'm']),
             Some(Subnegotiation::TerminalType("xterm".to_string()))
         );
     }
@@ -457,7 +568,7 @@ mod tests {
     #[test]
     fn parses_window_size_subnegotiation() {
         assert_eq!(
-            parse_subnegotiation(&[NAWS, 0, 120, 0, 40]),
+            parse_subnegotiation(&[option(TelnetOption::NAWS), 0, 120, 0, 40]),
             Some(Subnegotiation::WindowSize(TerminalSize::new(120, 40)))
         );
     }
@@ -465,18 +576,28 @@ mod tests {
     #[test]
     fn ignores_incomplete_or_unknown_subnegotiation() {
         assert_eq!(parse_subnegotiation(&[]), None);
-        assert_eq!(parse_subnegotiation(&[TTYPE]), None);
-        assert_eq!(parse_subnegotiation(&[NAWS, 0, 80, 0]), None);
-        assert_eq!(parse_subnegotiation(&[NEW_ENVIRON, 0]), None);
+        assert_eq!(parse_subnegotiation(&[option(TelnetOption::TTYPE)]), None);
+        assert_eq!(
+            parse_subnegotiation(&[option(TelnetOption::NAWS), 0, 80, 0]),
+            None
+        );
+        assert_eq!(
+            parse_subnegotiation(&[option(TelnetOption::NEW_ENVIRON), 0]),
+            None
+        );
     }
 
     #[test]
     fn parser_emits_negotiation_commands() {
         assert_eq!(
-            parser_events(&[IAC, WILL, TTYPE]),
+            parser_events(&[
+                IAC,
+                command(TelnetCommand::Will),
+                option(TelnetOption::TTYPE)
+            ]),
             vec![TelnetEvent::Negotiation {
-                command: WILL,
-                option: TTYPE,
+                command: TelnetCommand::Will,
+                option: TelnetOption::TTYPE,
             }]
         );
     }
@@ -484,17 +605,42 @@ mod tests {
     #[test]
     fn parser_emits_subnegotiation_payloads() {
         assert_eq!(
-            parser_events(&[IAC, SB, NAWS, 0, 80, 0, 24, IAC, SE]),
-            vec![TelnetEvent::Subnegotiation(vec![NAWS, 0, 80, 0, 24])]
+            parser_events(&[
+                IAC,
+                command(TelnetCommand::Sb),
+                option(TelnetOption::NAWS),
+                0,
+                80,
+                0,
+                24,
+                IAC,
+                command(TelnetCommand::Se)
+            ]),
+            vec![TelnetEvent::Subnegotiation(vec![
+                option(TelnetOption::NAWS),
+                0,
+                80,
+                0,
+                24
+            ])]
         );
     }
 
     #[test]
     fn parser_keeps_subnegotiation_mode_after_embedded_commands() {
         assert_eq!(
-            parser_events(&[IAC, SB, b'a', IAC, NOP, b'b', IAC, SE]),
+            parser_events(&[
+                IAC,
+                command(TelnetCommand::Sb),
+                b'a',
+                IAC,
+                command(TelnetCommand::Nop),
+                b'b',
+                IAC,
+                command(TelnetCommand::Se)
+            ]),
             vec![
-                TelnetEvent::Command(NOP),
+                TelnetEvent::Command(TelnetCommand::Nop),
                 TelnetEvent::Subnegotiation(vec![b'a', b'b']),
             ]
         );
@@ -508,8 +654,25 @@ mod tests {
     #[test]
     fn parser_keeps_escaped_iac_inside_subnegotiation() {
         assert_eq!(
-            parser_events(&[IAC, SB, TTYPE, 0, b'x', IAC, IAC, b'y', IAC, SE]),
-            vec![TelnetEvent::Subnegotiation(vec![TTYPE, 0, b'x', IAC, b'y'])]
+            parser_events(&[
+                IAC,
+                command(TelnetCommand::Sb),
+                option(TelnetOption::TTYPE),
+                0,
+                b'x',
+                IAC,
+                IAC,
+                b'y',
+                IAC,
+                command(TelnetCommand::Se)
+            ]),
+            vec![TelnetEvent::Subnegotiation(vec![
+                option(TelnetOption::TTYPE),
+                0,
+                b'x',
+                IAC,
+                b'y'
+            ])]
         );
     }
 
@@ -518,12 +681,30 @@ mod tests {
         let mut negotiation = TelnetNegotiation::new();
         let output = negotiation.initial_output();
 
-        assert!(contains(&output, &[IAC, WONT, ECHO]));
-        assert!(contains(&output, &[IAC, WILL, SGA]));
-        assert!(contains(&output, &[IAC, DO, TTYPE]));
-        assert!(contains(&output, &[IAC, DO, NAWS]));
-        assert!(contains(&output, &[IAC, DONT, LINEMODE]));
-        assert!(contains(&output, &[IAC, WONT, NEW_ENVIRON]));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Wont, TelnetOption::ECHO)
+        ));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Will, TelnetOption::SGA)
+        ));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Do, TelnetOption::TTYPE)
+        ));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Do, TelnetOption::NAWS)
+        ));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Dont, TelnetOption::LINEMODE)
+        ));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Wont, TelnetOption::NEW_ENVIRON)
+        ));
     }
 
     #[test]
@@ -532,12 +713,33 @@ mod tests {
         let _ = negotiation.initial_output();
 
         let step = negotiation.handle_event(TelnetEvent::Negotiation {
-            command: WILL,
-            option: TTYPE,
+            command: TelnetCommand::Will,
+            option: TelnetOption::TTYPE,
         });
 
-        assert_eq!(step.output, vec![IAC, SB, TTYPE, SEND, IAC, SE]);
+        assert_eq!(step.output, terminal_type_send());
         assert!(!step.extend_deadline);
+    }
+
+    #[test]
+    fn unknown_options_remain_pass_through_and_are_rejected() {
+        let unknown = TelnetOption::new(200);
+        let mut negotiation = TelnetNegotiation::new();
+        let _ = negotiation.initial_output();
+
+        let step = negotiation.handle_event(TelnetEvent::Negotiation {
+            command: TelnetCommand::Will,
+            option: unknown,
+        });
+
+        assert_eq!(step.output, option_command(TelnetCommand::Wont, unknown));
+
+        let step = negotiation.handle_event(TelnetEvent::Negotiation {
+            command: TelnetCommand::Do,
+            option: unknown,
+        });
+
+        assert_eq!(step.output, option_command(TelnetCommand::Dont, unknown));
     }
 
     #[test]
@@ -545,14 +747,26 @@ mod tests {
         let mut negotiation = TelnetNegotiation::new();
 
         let step = negotiation.handle_event(TelnetEvent::Subnegotiation(vec![
-            TTYPE, 0, b'v', b't', b'1', b'0', b'0',
+            option(TelnetOption::TTYPE),
+            0,
+            b'v',
+            b't',
+            b'1',
+            b'0',
+            b'0',
         ]));
 
         assert!(step.extend_deadline);
         assert_eq!(negotiation.info.term.as_deref(), Some("vt100"));
         assert!(!negotiation.is_complete());
 
-        let step = negotiation.handle_event(TelnetEvent::Subnegotiation(vec![NAWS, 0, 80, 0, 24]));
+        let step = negotiation.handle_event(TelnetEvent::Subnegotiation(vec![
+            option(TelnetOption::NAWS),
+            0,
+            80,
+            0,
+            24,
+        ]));
 
         assert!(step.extend_deadline);
         assert_eq!(negotiation.info.size, Some(TerminalSize::new(80, 24)));
@@ -562,8 +776,29 @@ mod tests {
     #[test]
     fn negotiate_telnet_reads_scripted_terminal_info() {
         let mut input = ScriptedByteSource::new(vec![
-            IAC, WILL, TTYPE, IAC, SB, TTYPE, 0, b'x', b't', b'e', b'r', b'm', IAC, SE, IAC, SB,
-            NAWS, 0, 100, 0, 40, IAC, SE,
+            IAC,
+            command(TelnetCommand::Will),
+            option(TelnetOption::TTYPE),
+            IAC,
+            command(TelnetCommand::Sb),
+            option(TelnetOption::TTYPE),
+            0,
+            b'x',
+            b't',
+            b'e',
+            b'r',
+            b'm',
+            IAC,
+            command(TelnetCommand::Se),
+            IAC,
+            command(TelnetCommand::Sb),
+            option(TelnetOption::NAWS),
+            0,
+            100,
+            0,
+            40,
+            IAC,
+            command(TelnetCommand::Se),
         ]);
         let mut output = Vec::new();
 
@@ -571,9 +806,15 @@ mod tests {
 
         assert_eq!(info.term.as_deref(), Some("xterm"));
         assert_eq!(info.size, Some(TerminalSize::new(100, 40)));
-        assert!(contains(&output, &[IAC, DO, TTYPE]));
-        assert!(contains(&output, &[IAC, DO, NAWS]));
-        assert!(contains(&output, &[IAC, SB, TTYPE, SEND, IAC, SE]));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Do, TelnetOption::TTYPE)
+        ));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Do, TelnetOption::NAWS)
+        ));
+        assert!(contains(&output, &terminal_type_send()));
     }
 
     #[test]
@@ -584,7 +825,13 @@ mod tests {
         let info = negotiate_telnet_with_source(&mut output, &mut input).unwrap();
 
         assert_eq!(info, TelnetInfo::default());
-        assert!(contains(&output, &[IAC, DO, TTYPE]));
-        assert!(contains(&output, &[IAC, DO, NAWS]));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Do, TelnetOption::TTYPE)
+        ));
+        assert!(contains(
+            &output,
+            &option_command(TelnetCommand::Do, TelnetOption::NAWS)
+        ));
     }
 }

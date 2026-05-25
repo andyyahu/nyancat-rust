@@ -25,7 +25,7 @@
 - `Config` 逐步型別化：`FrameLimit(NonZeroU32)`、`Duration` delay、`AxisCrop` / `AxisRange` 取代 frame/crop magic values。
 - terminal、palette、frame symbol、terminal size 改成語意型別，render hot path 保留 O(1) palette lookup。
 - `RenderState`、`Renderer`、`RenderLoop`、`FrameBuffer` 分離 frame bytes 生成、timing、buffer reuse、telnet newline 和 benchmark accounting。
-- telnet negotiation 拆成 parser、state machine、subnegotiation parser 和 `ByteSource`，可用 scripted input 測 response。
+- telnet negotiation 拆成 parser、state machine、subnegotiation parser 和 `ByteSource`；command / option 已型別化，未知 option 仍以 raw byte newtype 保留並可測。
 - `TerminalSession` 用 RAII restore terminal；Unix FFI 和 signal path 集中在 `sys.rs` / `runtime.rs`，stdin poll/read 回傳 typed outcomes 而不是吞成 bool / `Option`。
 - release gate、output smoke checks、benchmark report、benchmark matrix 和 CI/MSRV job 已建立。
 
@@ -71,7 +71,7 @@
 
 - 優先消滅 internal sentinel：用 `Option`、`NonZero*`、newtype、enum 表達狀態，而不是讓 `0`、`-1`、裸整數跨模組傳遞語意。
 - 將 public CLI 相容需求限制在 CLI 邊界內；進入 render/runtime/telnet 後應該是已驗證、型別化的設定。
-- 將 telnet command / option 從裸 `u8` 逐步收斂成 typed domain，保留未知 option 的 pass-through 能力。
+- 持續收斂 protocol/raw byte 邊界，保留未知 telnet option 的 pass-through 能力。
 - 強化 Unix FFI 邊界：優先補上 EINTR/error handling 與更清楚的 safe wrapper；若可攜性收益明確，再評估 `libc` / `sigaction` / `signal-hook`。
 - 將 render hot path 的改動建立在 benchmark 上；型別化不得引入 per-cell allocation、dynamic dispatch、或高頻 format work。
 

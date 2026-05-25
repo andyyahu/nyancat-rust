@@ -67,8 +67,8 @@ The resize signal path only sets an atomic flag. The render loop consumes that f
 
 Telnet support is intentionally synchronous:
 
-- `TelnetParser` converts bytes into parser events.
-- `TelnetNegotiation` handles state transitions and output bytes.
+- `TelnetParser` converts bytes into typed parser events.
+- `TelnetNegotiation` handles typed command / option state transitions and output bytes.
 - `ByteSource` lets tests drive negotiation with scripted input.
 - `TimeoutReader` is the production stdin/poll source.
 
