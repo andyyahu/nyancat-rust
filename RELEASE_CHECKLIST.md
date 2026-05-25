@@ -114,7 +114,7 @@ For comparable render-throughput measurements, build in release mode and redirec
 
 #### 2026-05-25
 
-- Commit: `3cd207f`
+- Commit: `5f424b4`
 - Rust: `rustc 1.95.0 (59807616e 2026-04-14)`
 - OS: `Linux 7.0.10-1-cachyos x86_64 GNU/Linux`
 - CPU: `Intel(R) Core(TM) Ultra 9 185H`
@@ -122,13 +122,13 @@ For comparable render-throughput measurements, build in release mode and redirec
 - Build: `cargo build --release`
 - Output: stdout redirected to `/dev/null`
 - Frames: 100,000
-- Runs per mode: 1
+- Runs per mode: 5
 
-| Mode | Command suffix | Median elapsed | Median FPS | Bytes | Avg frame bytes | Max frame bytes | Median throughput |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Xterm 256-color | `env TERM=xterm-256color ... --benchmark --frames 100000 --no-title --no-clear --no-counter` | 0.339324s | 294,703.91 | 401,883,158 | 4,018.83 | 4,152 | 1,129.50 MiB/s |
-| TrueColor | `env TERM=xterm-256color ... --benchmark --truecolor --frames 100000 --no-title --no-clear --no-counter` | 0.289067s | 345,940.17 | 520,949,705 | 5,209.50 | 5,424 | 1,718.69 MiB/s |
-| VT100 40x24 | `env TERM=vt100 ... --benchmark --frames 100000 --width 40 --height 24 --no-title --no-clear --no-counter` | 0.337797s | 296,036.03 | 308,616,555 | 3,086.17 | 3,170 | 871.29 MiB/s |
+| Mode | Command suffix | Median elapsed | Median FPS | Bytes | Avg frame bytes | Max frame bytes | Median throughput | Elapsed range |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Xterm 256-color | `env TERM=xterm-256color ... --benchmark --frames 100000 --no-title --no-clear --no-counter` | 1.160864s | 86,142.70 | 401,883,158 | 4,018.83 | 4,152 | 330.16 MiB/s | 1.124866s-1.195199s |
+| TrueColor | `env TERM=xterm-256color ... --benchmark --truecolor --frames 100000 --no-title --no-clear --no-counter` | 1.035395s | 96,581.46 | 520,949,705 | 5,209.50 | 5,424 | 479.83 MiB/s | 1.027166s-1.040219s |
+| VT100 40x24 | `env TERM=vt100 ... --benchmark --frames 100000 --width 40 --height 24 --no-title --no-clear --no-counter` | 1.211560s | 82,538.22 | 308,616,555 | 3,086.17 | 3,170 | 242.93 MiB/s | 1.182115s-1.294123s |
 
 ## Packaging Checks
 
