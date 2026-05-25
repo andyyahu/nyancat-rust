@@ -32,7 +32,11 @@ This document records the current module boundaries and the design constraints t
 | `cli.rs` | `Config`, crop option types, CLI actions, CLI errors, and option parsing. |
 | `terminal.rs` | Terminal size detection adapter and terminal type classification. |
 | `telnet.rs` | Telnet parser, negotiation state, byte-source abstraction, and negotiated terminal metadata. |
-| `render.rs` | Palette construction, frame rendering, render loop timing, frame buffer output, and benchmark stats. |
+| `render.rs` | Render orchestration, `RenderState`, frame composition, intro output, resize handling, and `RunOutcome`. |
+| `render/palette.rs` | Terminal-specific palette tables and O(1) frame-symbol lookup. |
+| `render/frame_buffer.rs` | Reusable frame byte buffer, telnet newline conversion, and frame prefix helpers. |
+| `render/render_loop.rs` | Frame index advancement, frame-limit tracking, and target-delay sleeping. |
+| `render/benchmark.rs` | Benchmark frame accounting and stable report formatting. |
 | `runtime.rs` | Terminal restore sequences, signal handlers, resize flag, and session RAII guard. |
 | `sys.rs` | Unix FFI declarations and safe wrappers for signals, typed poll/read outcomes, write, ioctl, and `_exit`. |
 | `main.rs` | Process-level composition and exit-code decisions. |
@@ -48,10 +52,10 @@ CLI arguments become `cli::Config`. `main.rs` combines `Config`, terminal metada
 `render::run` repeatedly:
 
 1. Updates terminal size after resize signals when not in telnet mode.
-2. Clears and prefixes a reusable `FrameBuffer`.
+2. Clears and prefixes a reusable `render::frame_buffer::FrameBuffer`.
 3. Calls `Renderer::render_frame`.
 4. Writes the buffer to stdout and flushes.
-5. Advances `RenderLoop` state or returns `RunOutcome`.
+5. Advances `render::render_loop::RenderLoop` state or returns `RunOutcome`.
 
 Frame data remains private to `animation.rs`. Rendering obtains symbols through `frame_symbol(frame, row, col)`, which returns `FrameSymbol`. Palette lookup remains an O(1) array index via `FrameSymbol::as_byte()`.
 

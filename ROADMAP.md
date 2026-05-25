@@ -24,7 +24,7 @@
 - CLI 改成 `CliAction` / `CliError`，`OPTION_SPECS` 成為 parser 和 `--help` 的單一資料源。
 - `Config` 逐步型別化：`FrameLimit(NonZeroU32)`、`Duration` delay、`AxisCrop` / `AxisRange` 取代 frame/crop magic values。
 - terminal、palette、frame symbol、terminal size 改成語意型別，render hot path 保留 O(1) palette lookup。
-- `RenderState`、`Renderer`、`RenderLoop`、`FrameBuffer` 分離 frame bytes 生成、timing、buffer reuse、telnet newline 和 benchmark accounting。
+- `RenderState`、`Renderer`、`render/` 子模組分離 frame bytes 生成、palette lookup、timing、buffer reuse、telnet newline 和 benchmark accounting。
 - telnet negotiation 拆成 parser、state machine、subnegotiation parser 和 `ByteSource`；command / option 已型別化，未知 option 仍以 raw byte newtype 保留並可測。
 - `TerminalSession` 用 RAII restore terminal；Unix FFI 和 signal path 集中在 `sys.rs` / `runtime.rs`，stdin poll/read 回傳 typed outcomes 而不是吞成 bool / `Option`。
 - release gate、output smoke byte/checksum checks、benchmark report、benchmark matrix 和 CI/MSRV job 已建立。
@@ -99,7 +99,7 @@
 目標不是把檔案切碎，而是讓每個模組的責任更明確。
 
 - `cli.rs` 已有 `OPTION_SPECS`，後續可考慮讓 README / manpage 的 option table 也由同一份資料生成。
-- `render.rs` 是最大模組，後續若要拆，優先考慮 `palette`、`frame_buffer`、`render_loop`、`benchmark_stats` 這些自然邊界。
+- `render.rs` 已拆出 `palette`、`frame_buffer`、`render_loop`、`benchmark` 這些自然邊界；後續只有在 `Renderer` / `RenderState` 長出新責任時再繼續拆。
 - `telnet.rs` 目前可測性已足夠，除非新增協定行為，否則不急著拆。
 - app-level error enum 仍是條件式保留項，只有錯誤語意跨模組變複雜時才做。
 
