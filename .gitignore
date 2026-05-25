@@ -2,3 +2,4 @@ nyancat
 *.o
 *.pyc
 /target
+/CLAUDE.md
