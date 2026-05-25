@@ -185,14 +185,22 @@ impl<'a> Renderer<'a> {
 
     fn render_counter(&self, out: &mut FrameBuffer, state: &RenderState, elapsed_seconds: u64) {
         if self.config.show_counter {
-            let width =
-                (state.terminal_size.width() - 29 - elapsed_seconds.to_string().len() as i32) / 2;
+            let width = (state.terminal_size.width() - 29 - decimal_digits(elapsed_seconds)) / 2;
             out.push_spaces(width);
             out.push_bytes(b"\x1b[1;37m");
             let _ = write!(out, "You have nyaned for {elapsed_seconds} seconds!");
             out.push_bytes(b"\x1b[J\x1b[0m");
         }
     }
+}
+
+fn decimal_digits(mut value: u64) -> i32 {
+    let mut digits = 1;
+    while value >= 10 {
+        value /= 10;
+        digits += 1;
+    }
+    digits
 }
 
 pub(crate) fn run(
@@ -423,5 +431,15 @@ mod tests {
 
         assert!(bytes_contain(&out, b"\r\0\n"));
         assert!(!bytes_contain(&out, b"\n\n"));
+    }
+
+    #[test]
+    fn decimal_digits_counts_without_formatting() {
+        assert_eq!(decimal_digits(0), 1);
+        assert_eq!(decimal_digits(9), 1);
+        assert_eq!(decimal_digits(10), 2);
+        assert_eq!(decimal_digits(999), 3);
+        assert_eq!(decimal_digits(1_000), 4);
+        assert_eq!(decimal_digits(u64::MAX), 20);
     }
 }
