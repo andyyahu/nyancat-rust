@@ -114,14 +114,14 @@ impl<'a> Renderer<'a> {
         frame_index: usize,
         output: &'static [u8],
     ) {
-        let mut last = 0u8;
+        let mut last: Option<FrameSymbol> = None;
 
         for y in state.min_row..state.max_row {
             for x in state.min_col..state.max_col {
                 let color = Self::symbol_at(frame_index, y, x);
                 let escape = self.palette.color(color);
-                if color.as_byte() != last && !escape.is_empty() {
-                    last = color.as_byte();
+                if last != Some(color) && !escape.is_empty() {
+                    last = Some(color);
                     out.push_bytes(escape);
                 }
                 out.push_bytes(output);

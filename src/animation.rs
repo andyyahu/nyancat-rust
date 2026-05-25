@@ -1,54 +1,61 @@
+use std::num::NonZeroU8;
+
 pub const FRAME_WIDTH: usize = 64;
 pub const FRAME_HEIGHT: usize = 64;
 
+// Wraps NonZeroU8 so that Option<FrameSymbol> is a single byte (0 is the niche
+// for None). No symbol maps to byte 0, so this is free, and it lets the render
+// hot loop track "last emitted color" as an Option without growing the value.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct FrameSymbol(u8);
+pub(crate) struct FrameSymbol(NonZeroU8);
 
 impl FrameSymbol {
-    pub(crate) const BACKGROUND: Self = Self(b',');
-    pub(crate) const STAR: Self = Self(b'.');
-    pub(crate) const BLACK: Self = Self(b'\'');
-    pub(crate) const BODY_EDGE: Self = Self(b'@');
-    pub(crate) const BODY: Self = Self(b'$');
-    pub(crate) const BODY_MARK: Self = Self(b'-');
-    pub(crate) const RED: Self = Self(b'>');
-    pub(crate) const ORANGE: Self = Self(b'&');
-    pub(crate) const YELLOW: Self = Self(b'+');
-    pub(crate) const GREEN: Self = Self(b'#');
-    pub(crate) const BLUE: Self = Self(b'=');
-    pub(crate) const INDIGO: Self = Self(b';');
-    pub(crate) const FACE: Self = Self(b'*');
-    pub(crate) const BLUSH: Self = Self(b'%');
+    pub(crate) const BACKGROUND: Self = Self::from_byte(b',');
+    pub(crate) const STAR: Self = Self::from_byte(b'.');
+    pub(crate) const BLACK: Self = Self::from_byte(b'\'');
+    pub(crate) const BODY_EDGE: Self = Self::from_byte(b'@');
+    pub(crate) const BODY: Self = Self::from_byte(b'$');
+    pub(crate) const BODY_MARK: Self = Self::from_byte(b'-');
+    pub(crate) const RED: Self = Self::from_byte(b'>');
+    pub(crate) const ORANGE: Self = Self::from_byte(b'&');
+    pub(crate) const YELLOW: Self = Self::from_byte(b'+');
+    pub(crate) const GREEN: Self = Self::from_byte(b'#');
+    pub(crate) const BLUE: Self = Self::from_byte(b'=');
+    pub(crate) const INDIGO: Self = Self::from_byte(b';');
+    pub(crate) const FACE: Self = Self::from_byte(b'*');
+    pub(crate) const BLUSH: Self = Self::from_byte(b'%');
 
     #[inline]
     const fn from_byte(byte: u8) -> Self {
-        Self(byte)
+        match NonZeroU8::new(byte) {
+            Some(value) => Self(value),
+            None => panic!("frame symbol byte must be non-zero"),
+        }
     }
 
     #[inline]
     pub(crate) const fn as_byte(self) -> u8 {
-        self.0
+        self.0.get()
     }
 
     #[cfg(test)]
     #[inline]
     pub(crate) const fn is_renderable(self) -> bool {
         matches!(
-            self,
-            Self::BACKGROUND
-                | Self::STAR
-                | Self::BLACK
-                | Self::BODY_EDGE
-                | Self::BODY
-                | Self::BODY_MARK
-                | Self::RED
-                | Self::ORANGE
-                | Self::YELLOW
-                | Self::GREEN
-                | Self::BLUE
-                | Self::INDIGO
-                | Self::FACE
-                | Self::BLUSH
+            self.as_byte(),
+            b',' | b'.'
+                | b'\''
+                | b'@'
+                | b'$'
+                | b'-'
+                | b'>'
+                | b'&'
+                | b'+'
+                | b'#'
+                | b'='
+                | b';'
+                | b'*'
+                | b'%'
         )
     }
 }
@@ -875,6 +882,14 @@ pub(crate) fn frame_symbol(frame_index: usize, row: usize, col: usize) -> FrameS
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn option_frame_symbol_is_one_byte() {
+        // The NonZeroU8 niche keeps Option<FrameSymbol> a single byte, so the
+        // render hot loop can track "last color" as an Option for free.
+        assert_eq!(size_of::<FrameSymbol>(), 1);
+        assert_eq!(size_of::<Option<FrameSymbol>>(), 1);
+    }
 
     #[test]
     fn all_frames_have_expected_dimensions() {
