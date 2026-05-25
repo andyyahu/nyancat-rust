@@ -234,11 +234,18 @@ pub(crate) fn run(
     loop {
         let frame_start = Instant::now();
 
-        if !config.telnet && take_resize_pending() {
+        let resized = !config.telnet && take_resize_pending();
+        if resized {
             state.update_terminal_size(terminal_size());
         }
 
         buffer.clear();
+        if resized && config.clear_screen {
+            // The previous frame was drawn for the old terminal size. Clear the
+            // screen so a now-narrower (or shorter) frame cannot leave stale
+            // cells along the right edge or below the animation.
+            buffer.push_bytes(b"\x1b[2J");
+        }
         buffer.push_frame_prefix(config.clear_screen);
 
         renderer.render_frame(

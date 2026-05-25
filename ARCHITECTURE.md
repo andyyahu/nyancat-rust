@@ -71,7 +71,7 @@ The geometric crop options (`--min-rows`, `--max-rows`, `--min-cols`, `--max-col
 
 Normal execution restores the terminal through `TerminalSession` drop. Signal paths cannot rely on normal unwinding, so they use raw async-signal-compatible output and `sys::exit`.
 
-The resize signal path only sets an atomic flag. The render loop consumes that flag and recalculates crop bounds in normal code.
+The resize signal path only sets an atomic flag. The render loop consumes that flag, recalculates crop bounds in normal code, and (in clear-screen mode) clears the screen for that one frame so a now-narrower or shorter animation cannot leave stale cells from the previous terminal size along the right edge or below the cat.
 
 ## Telnet Flow
 
