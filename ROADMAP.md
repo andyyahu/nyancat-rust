@@ -71,6 +71,7 @@
 - 優先消滅 internal sentinel：用 `Option`、`NonZero*`、newtype、enum 表達狀態，而不是讓 `0`、`-1`、裸整數跨模組傳遞語意。
 - 將 public CLI 相容需求限制在 CLI 邊界內；進入 render/runtime/telnet 後應該是已驗證、型別化的設定。
 - 持續收斂 protocol/raw byte 邊界，保留未知 telnet option 的 pass-through 能力。
+- telnet parser 已有 in-tree 對抗測試（`parser_survives_adversarial_input`，零依賴 PRNG + 針對性種子，跑在 `cargo test` gate 內，斷言不 panic / sb buffer 有界 / 解析具決定性 / 協商必定終止）。更深的覆蓋（nightly `cargo-fuzz` libFuzzer target）列為未來延伸，需 nightly toolchain，不進預設 gate。
 - 強化 Unix FFI 邊界：優先補上 EINTR/error handling 與更清楚的 safe wrapper；若可攜性收益明確，再評估 `libc` / `sigaction` / `signal-hook`。
 - 將 render hot path 的改動建立在 benchmark 上；型別化不得引入 per-cell allocation、dynamic dispatch、或高頻 format work。
 
@@ -113,10 +114,10 @@
 
 這部分會把終端玩具推向正式軟體發行品質。
 
-- 確認 `Cargo.toml` metadata 是否足夠支援 crates.io 或 GitHub release。
+- `v*` tag 會觸發 `.github/workflows/release.yml`：linux job 先跑 `scripts/release_check.sh` gate，再用 `scripts/release_archive.sh` 建 archive 並建立 GitHub Release；macOS job 接著上傳對應 archive。目前產出 x86_64-linux 與 arm64-macOS 兩個 artifact，更多 target（其他 arch / BSD）是後續 build matrix 延伸。
+- crates.io 發佈仍是「刻意延遲」的決策，不進自動化：需要先確認 crate 名稱所有權與發佈 token，且發佈是不可逆動作，應由維護者手動執行而非 CI 自動觸發。`Cargo.toml` metadata 已具備 description/repository/homepage/readme/license/keywords/categories,足以支援 GitHub Release 與未來的 crates.io。
 - 將 package manifest 檢查納入 release gate，避免發行檔案清單或 metadata 在最後一刻才出問題。
 - 確認 manpage、systemd service、README 安裝步驟一致。
-- 提供 release archive helper / checklist，而不是只依賴本機 build。
 - 如果要改 default branch 名稱，先同步本機、GitHub default branch、README 文件。
 
 完成標準：
