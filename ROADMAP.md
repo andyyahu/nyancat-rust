@@ -86,13 +86,13 @@
 效能優化要建立在可重跑 benchmark 和明確瓶頸上。
 
 - 先 profile，再改 hot path。
-- 每次效能相關變更後更新或至少重跑 benchmark matrix；用多輪 median 結果降低單次 CPU governor / cache 抖動的影響。
+- 效能驗證以 `scripts/benchmark_callgrind.sh` 的確定性指令數為準（callgrind 計數 frequency-independent，免疫變頻 / 排程雜訊）。`scripts/benchmark_matrix.sh` 的 wall-clock FPS 只當輔助：本機是 asusctl + scx_LAVD 筆電，throughput 可跨 run 漂移約 2x，單次 wall-clock 對小改動不可信。
 - 優先觀察 frame buffer reuse、palette lookup、newline conversion、counter formatting、stdout write pattern。
 - 避免為了抽象引入 per-cell allocation、dynamic dispatch、或高頻 format work。
 
 完成標準：
 
-- 每個 performance commit 都能附上「變更前 / 變更後」benchmark。
+- 每個 performance commit 都能附上「變更前 / 變更後」的 callgrind 指令數對照。
 - 若效能沒有明顯改善，保留可讀性收益時才接受。
 
 ### 5. Module Elegance

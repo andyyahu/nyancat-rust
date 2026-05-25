@@ -85,12 +85,11 @@ The automated smoke checks also verify key output markers:
 
 ## Benchmarking
 
-When performance changes are intentional, refresh the benchmark snapshot in this file.
-
-Recommended commands:
+When performance changes are intentional, verify them with the deterministic instruction-count benchmark (immune to CPU frequency scaling and scheduler noise), and optionally refresh the wall-clock snapshot below.
 
 ```bash
-scripts/benchmark_matrix.sh 100000 5
+scripts/benchmark_callgrind.sh 1000   # objective: retired-instruction counts via valgrind (preferred)
+scripts/benchmark_matrix.sh 100000 5  # supplementary: wall-clock FPS, environment-dependent
 ```
 
 Record:
