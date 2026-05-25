@@ -59,16 +59,18 @@ impl RenderState {
     }
 
     fn automatic_col_range(&self) -> AxisRange {
+        let terminal_width = self.terminal_size.width();
         AxisRange::new(
-            (FRAME_WIDTH as i32 - self.terminal_size.width / 2) / 2,
-            (FRAME_WIDTH as i32 + self.terminal_size.width / 2) / 2,
+            (FRAME_WIDTH as i32 - terminal_width / 2) / 2,
+            (FRAME_WIDTH as i32 + terminal_width / 2) / 2,
         )
     }
 
     fn automatic_row_range(&self) -> AxisRange {
+        let terminal_height = self.terminal_size.height();
         AxisRange::new(
-            (FRAME_HEIGHT as i32 - (self.terminal_size.height - 1)) / 2,
-            (FRAME_HEIGHT as i32 + (self.terminal_size.height - 1)) / 2,
+            (FRAME_HEIGHT as i32 - (terminal_height - 1)) / 2,
+            (FRAME_HEIGHT as i32 + (terminal_height - 1)) / 2,
         )
     }
 }
@@ -184,7 +186,7 @@ impl<'a> Renderer<'a> {
     fn render_counter(&self, out: &mut FrameBuffer, state: &RenderState, elapsed_seconds: u64) {
         if self.config.show_counter {
             let width =
-                (state.terminal_size.width - 29 - elapsed_seconds.to_string().len() as i32) / 2;
+                (state.terminal_size.width() - 29 - elapsed_seconds.to_string().len() as i32) / 2;
             out.push_spaces(width);
             out.push_bytes(b"\x1b[1;37m");
             let _ = write!(out, "You have nyaned for {elapsed_seconds} seconds!");

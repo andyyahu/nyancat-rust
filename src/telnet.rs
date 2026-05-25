@@ -202,12 +202,11 @@ fn parse_subnegotiation(bytes: &[u8]) -> Option<Subnegotiation> {
         Some(TelnetOption::TTYPE) if bytes.len() >= 2 => Some(Subnegotiation::TerminalType(
             String::from_utf8_lossy(&bytes[2..]).into_owned(),
         )),
-        Some(TelnetOption::NAWS) if bytes.len() >= 5 => {
-            Some(Subnegotiation::WindowSize(TerminalSize::new(
-                u16::from_be_bytes([bytes[1], bytes[2]]) as i32,
-                u16::from_be_bytes([bytes[3], bytes[4]]) as i32,
-            )))
-        }
+        Some(TelnetOption::NAWS) if bytes.len() >= 5 => TerminalSize::try_new(
+            u16::from_be_bytes([bytes[1], bytes[2]]) as i32,
+            u16::from_be_bytes([bytes[3], bytes[4]]) as i32,
+        )
+        .map(Subnegotiation::WindowSize),
         _ => None,
     }
 }
@@ -570,6 +569,18 @@ mod tests {
         assert_eq!(
             parse_subnegotiation(&[option(TelnetOption::NAWS), 0, 120, 0, 40]),
             Some(Subnegotiation::WindowSize(TerminalSize::new(120, 40)))
+        );
+    }
+
+    #[test]
+    fn ignores_zero_window_size_subnegotiation() {
+        assert_eq!(
+            parse_subnegotiation(&[option(TelnetOption::NAWS), 0, 0, 0, 40]),
+            None
+        );
+        assert_eq!(
+            parse_subnegotiation(&[option(TelnetOption::NAWS), 0, 120, 0, 0]),
+            None
         );
     }
 

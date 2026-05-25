@@ -23,7 +23,7 @@
 - 拆分 `main.rs`，將 CLI、render、runtime、sys、telnet、terminal、animation 分成獨立模組。
 - CLI 改成 `CliAction` / `CliError`，`OPTION_SPECS` 成為 parser 和 `--help` 的單一資料源。
 - `Config` 逐步型別化：`FrameLimit(NonZeroU32)`、`Duration` delay、`AxisCrop` / `AxisRange` 取代 frame/crop magic values。
-- terminal、palette、frame symbol、terminal size 改成語意型別，render hot path 保留 O(1) palette lookup。
+- terminal、palette、frame symbol、terminal size 改成語意型別；`TerminalSize` 內部保證 positive dimensions，render hot path 保留 O(1) palette lookup。
 - `RenderState`、`Renderer`、`render/` 子模組分離 frame bytes 生成、palette lookup、timing、buffer reuse、telnet newline 和 benchmark accounting。
 - telnet negotiation 拆成 parser、state machine、subnegotiation parser 和 `ByteSource`；command / option 已型別化，未知 option 仍以 raw byte newtype 保留並可測。
 - `TerminalSession` 用 RAII restore terminal；Unix FFI 和 signal path 集中在 `sys.rs` / `runtime.rs`，stdin poll/read 回傳 typed outcomes 而不是吞成 bool / `Option`。

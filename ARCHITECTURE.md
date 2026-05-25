@@ -30,7 +30,7 @@ This document records the current module boundaries and the design constraints t
 | :--- | :--- |
 | `animation.rs` | Raw frame data, frame dimensions, `FrameSymbol`, and frame symbol accessors. |
 | `cli.rs` | `Config`, crop option types, CLI actions, CLI errors, and option parsing. |
-| `terminal.rs` | Terminal size detection adapter and terminal type classification. |
+| `terminal.rs` | Positive terminal size type, terminal size detection adapter, and terminal type classification. |
 | `telnet.rs` | Telnet parser, negotiation state, byte-source abstraction, and negotiated terminal metadata. |
 | `render.rs` | Render orchestration, `RenderState`, frame composition, intro output, resize handling, and `RunOutcome`. |
 | `render/palette.rs` | Terminal-specific palette tables and O(1) frame-symbol lookup. |
@@ -58,6 +58,8 @@ CLI arguments become `cli::Config`. `main.rs` combines `Config`, terminal metada
 5. Advances `render::render_loop::RenderLoop` state or returns `RunOutcome`.
 
 Frame data remains private to `animation.rs`. Rendering obtains symbols through `frame_symbol(frame, row, col)`, which returns `FrameSymbol`. Palette lookup remains an O(1) array index via `FrameSymbol::as_byte()`.
+
+Terminal dimensions enter the core as `terminal::TerminalSize`, which stores non-zero `u16` values and exposes signed accessors for crop arithmetic. Syscall and telnet inputs that report zero or invalid dimensions are rejected at the adapter boundary and fall back to defaults when appropriate.
 
 CLI option metadata lives in `cli::OPTION_SPECS`. Parsing, value arity, and generated `--help` output all use that table so public option drift is caught in one module.
 
